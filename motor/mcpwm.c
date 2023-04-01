@@ -782,70 +782,40 @@ float mcpwm_get_kv_filtered(void) {
 	return value;
 }
 
-static uint32_t cycle_count = 0;
+/// Modified code to generate a square wave AC for a DC motor.
 
-uint32_t mcpwm_get_cycle_count(void) {
-    return cycle_count;
-}
-
-/**
- * Get the motor current. The sign of this value will represent whether the motor is drawing (positive) or generating
- * (negative) current. For AC output, the voltage polarity changes every other PWM cycle, so the sign will also change
- * every other cycle.
- *
- * @return The motor current.
- */
 float mcpwm_get_tot_current(void) {
+    static bool polarity = true;
     float current = last_current_sample;
-    if (motor->m_conf.motor_type == MOTOR_TYPE_DC) {
-        return current;
+    if (polarity) {
+        polarity = !polarity;
     } else {
-        if (cycle_count % 2 == 1) {
-            current = -current;
-        }
-        cycle_count++;
-        return current;
+        current = -current;
+        polarity = !polarity;
     }
+    return current;
 }
 
-/**
- * Get the FIR-filtered motor current. The sign of this value will represent whether the motor is drawing (positive) or generating
- * (negative) current. For AC output, the voltage polarity changes every other PWM cycle, so the sign will also change
- * every other cycle.
- *
- * @return The filtered motor current.
- */
 float mcpwm_get_tot_current_filtered(void) {
-    float current = last_current_sample_filtered;
-    if (motor->m_conf.motor_type == MOTOR_TYPE_DC) {
-        return current;
+    static bool polarity_filtered = true;
+    float current_filtered = last_current_sample_filtered;
+    if (polarity_filtered) {
+        polarity_filtered = !polarity_filtered;
     } else {
-        if (cycle_count % 2 == 1) {
-            current = -current;
-        }
-        cycle_count++;
-        return current;
+        current_filtered = -current_filtered;
+        polarity_filtered = !polarity_filtered;
     }
+    return current_filtered;
 }
 
-/**
- * Get the motor current. The sign of this value represents the direction in which the motor generates torque.
- *
- * @return The motor current.
- */
 float mcpwm_get_tot_current_directional(void) {
-    float current = mcpwm_get_tot_current();
-    return dutycycle_now > 0.0 ? current : -current;
+    float retval = mcpwm_get_tot_current();
+    return dutycycle_now > 0.0 ? retval : -retval;
 }
 
-/**
- * Get the filtered motor current. The sign of this value represents the direction in which the motor generates torque.
- *
- * @return The filtered motor current.
- */
 float mcpwm_get_tot_current_directional_filtered(void) {
-    float current = mcpwm_get_tot_current_filtered();
-    return dutycycle_now > 0.0 ? current : -current;
+    float retval = mcpwm_get_tot_current_filtered();
+    return dutycycle_now > 0.0 ? retval : -retval;
 }
 
 /**
