@@ -782,7 +782,11 @@ float mcpwm_get_kv_filtered(void) {
 	return value;
 }
 
-/static uint32_t cycle_count = 0;
+static uint32_t cycle_count = 0;
+
+uint32_t mcpwm_get_cycle_count(void) {
+    return cycle_count;
+}
 
 /**
  * Get the motor current. The sign of this value will represent whether the motor is drawing (positive) or generating
