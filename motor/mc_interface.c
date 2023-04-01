@@ -568,14 +568,8 @@ void mc_interface_set_duty_noramp(float dutyCycle) {
 	switch (motor_now()->m_conf.motor_type) {
 	case MOTOR_TYPE_BLDC:
 	case MOTOR_TYPE_DC:
-		uint32_t cycle_count = mcpwm_get_cycle_count();
-    	if (cycle_count % 2 == 0) {
-        current = mcpwm_get_tot_current_filtered();
-    } else {
-        current = -1 * mcpwm_get_tot_current_filtered();
-    }
-    // Incrementing cycle_count should be done in the mcpwm_get_tot_current_filtered function
-}
+		mcpwm_set_duty_noramp(DIR_MULT * dutyCycle);
+		break;
 
 	case MOTOR_TYPE_FOC:
 		mcpwm_foc_set_duty_noramp(DIR_MULT * dutyCycle);
