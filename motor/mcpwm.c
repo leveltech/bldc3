@@ -159,7 +159,7 @@ static void pll_run(float phase, float dt, volatile float *phase_var,
 
 // Defines
 #define IS_DETECTING()			(state == MC_STATE_DETECTING)
-#define DEADTIME_CYCLES 200
+#define DEADTIME_CYCLES 15
 
 // Threads
 static THD_WORKING_AREA(timer_thread_wa, 512);
@@ -2112,7 +2112,7 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		}
 
 		// Don't start in the opposite direction when the RPM is too high even if the current is low enough.
-
+"""
 		if (conf->motor_type != MOTOR_TYPE_DC) {
 			const float rpm = mcpwm_get_rpm();
 			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
@@ -2121,7 +2121,7 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 				dutycycle_now = conf->l_min_duty;
 			}
 		}
-
+"""
 		set_duty_cycle_ll(dutycycle_now);
 	}
 
