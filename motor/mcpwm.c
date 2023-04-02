@@ -159,7 +159,7 @@ static void pll_run(float phase, float dt, volatile float *phase_var,
 
 // Defines
 #define IS_DETECTING()			(state == MC_STATE_DETECTING)
-#define DEADTIME_CYCLES 10
+#define DEADTIME_CYCLES 6
 
 // Threads
 static THD_WORKING_AREA(timer_thread_wa, 512);
