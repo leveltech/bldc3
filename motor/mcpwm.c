@@ -782,40 +782,52 @@ float mcpwm_get_kv_filtered(void) {
 	return value;
 }
 
-/// Modified code to generate a square wave AC for a DC motor.
-
+/**
+ * Get the motor current. The sign of this value will
+ * represent whether the motor is drawing (positive) or generating
+ * (negative) current.
+ *
+ * @return
+ * The motor current.
+ */
 float mcpwm_get_tot_current(void) {
-    static bool polarity = true;
-    float current = last_current_sample;
-    if (polarity) {
-        polarity = !polarity;
-    } else {
-        current = -current;
-        polarity = !polarity;
-    }
-    return current;
+	return last_current_sample;
 }
 
+/**
+ * Get the FIR-filtered motor current. The sign of this value will
+ * represent whether the motor is drawing (positive) or generating
+ * (negative) current.
+ *
+ * @return
+ * The filtered motor current.
+ */
 float mcpwm_get_tot_current_filtered(void) {
-    static bool polarity_filtered = true;
-    float current_filtered = last_current_sample_filtered;
-    if (polarity_filtered) {
-        polarity_filtered = !polarity_filtered;
-    } else {
-        current_filtered = -current_filtered;
-        polarity_filtered = !polarity_filtered;
-    }
-    return current_filtered;
+	return last_current_sample_filtered;
 }
 
+/**
+ * Get the motor current. The sign of this value represents the direction
+ * in which the motor generates torque.
+ *
+ * @return
+ * The motor current.
+ */
 float mcpwm_get_tot_current_directional(void) {
-    float retval = mcpwm_get_tot_current();
-    return dutycycle_now > 0.0 ? retval : -retval;
+	const float retval = mcpwm_get_tot_current();
+	return dutycycle_now > 0.0 ? retval : -retval;
 }
 
+/**
+ * Get the filtered motor current. The sign of this value represents the
+ * direction in which the motor generates torque.
+ *
+ * @return
+ * The filtered motor current.
+ */
 float mcpwm_get_tot_current_directional_filtered(void) {
-    float retval = mcpwm_get_tot_current_filtered();
-    return dutycycle_now > 0.0 ? retval : -retval;
+	const float retval = mcpwm_get_tot_current_filtered();
+	return dutycycle_now > 0.0 ? retval : -retval;
 }
 
 /**
@@ -2099,6 +2111,7 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		}
 
 		// Don't start in the opposite direction when the RPM is too high even if the current is low enough.
+
 		if (conf->motor_type != MOTOR_TYPE_DC) {
 			const float rpm = mcpwm_get_rpm();
 			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
@@ -2681,8 +2694,17 @@ static void set_switching_frequency(float frequency) {
 	set_next_timer_settings(&timer_tmp);
 }
 
+static bool invert_duty_cycle = false;
+
 static void set_next_comm_step(int next_step) {
 	if (conf->motor_type == MOTOR_TYPE_DC) {
+		invert_duty_cycle = !invert_duty_cycle;
+		uint32_t pwm_mode = invert_duty_cycle ? TIM_OCMode_Inactive : TIM_OCMode_PWM1;
+		uint32_t inactive_mode = invert_duty_cycle ? TIM_OCMode_PWM1 : TIM_OCMode_Inactive;
+
+		// Deadtime
+		uint16_t deadtime = conf->dead_time;
+
 		// 0
 		TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
 		TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
@@ -2690,24 +2712,30 @@ static void set_next_comm_step(int next_step) {
 
 		if (direction) {
 			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, pwm_mode);
 			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 
 			// -
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, inactive_mode);
 			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+			// Set deadtime
+			TIM1->BDTR |= (deadtime << 1);
 		} else {
 			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, pwm_mode);
 			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
 
 			// -
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, inactive_mode);
 			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+
+			// Set deadtime
+			TIM1->BDTR |= (deadtime << 1);
 		}
 
 		return;
