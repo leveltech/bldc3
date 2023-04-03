@@ -534,7 +534,7 @@
 #define MCCONF_M_DRV8301_OC_ADJ			16 // DRV8301 over current protection threshold
 #endif
 #ifndef MCCONF_M_BLDC_F_SW_MIN
-#define MCCONF_M_BLDC_F_SW_MIN			3000 // Minimum switching frequency in bldc mode
+#define MCCONF_M_BLDC_F_SW_MIN			50 // Minimum switching frequency in bldc mode
 #endif
 #ifndef MCCONF_M_BLDC_F_SW_MAX
 #define MCCONF_M_BLDC_F_SW_MAX			35000 // Maximum switching frequency in bldc mode
