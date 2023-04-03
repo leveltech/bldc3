@@ -540,7 +540,7 @@
 #define MCCONF_M_BLDC_F_SW_MAX			35000 // Maximum switching frequency in bldc mode
 #endif
 #ifndef MCCONF_M_DC_F_SW
-#define MCCONF_M_DC_F_SW				25000 // Switching frequency in dc mode
+#define MCCONF_M_DC_F_SW				2000 // Switching frequency in dc mode
 #endif
 #ifndef MCCONF_M_NTC_MOTOR_BETA
 #define MCCONF_M_NTC_MOTOR_BETA			3380.0 // Beta value for motor termistor
