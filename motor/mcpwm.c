@@ -2754,7 +2754,6 @@ static void set_next_comm_step() {
 		current_step++;
 		return;
 	}
-}
 
 	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
 	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
