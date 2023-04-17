@@ -534,13 +534,13 @@
 #define MCCONF_M_DRV8301_OC_ADJ			16 // DRV8301 over current protection threshold
 #endif
 #ifndef MCCONF_M_BLDC_F_SW_MIN
-#define MCCONF_M_BLDC_F_SW_MIN			50 // Minimum switching frequency in bldc mode
+#define MCCONF_M_BLDC_F_SW_MIN			3000 // Minimum switching frequency in bldc mode
 #endif
 #ifndef MCCONF_M_BLDC_F_SW_MAX
 #define MCCONF_M_BLDC_F_SW_MAX			35000 // Maximum switching frequency in bldc mode
 #endif
 #ifndef MCCONF_M_DC_F_SW
-#define MCCONF_M_DC_F_SW				2000 // Switching frequency in dc mode
+#define MCCONF_M_DC_F_SW				25000 // Switching frequency in dc mode
 #endif
 #ifndef MCCONF_M_NTC_MOTOR_BETA
 #define MCCONF_M_NTC_MOTOR_BETA			3380.0 // Beta value for motor termistor
