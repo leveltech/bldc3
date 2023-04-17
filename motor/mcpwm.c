@@ -2708,19 +2708,19 @@ static void set_next_comm_step(int next_step) {
 
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
 			break;
 
 		case 1:
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
 
 			// +
@@ -2730,19 +2730,19 @@ static void set_next_comm_step(int next_step) {
 
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
 			break;
 
 		case 2:
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
 
 			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Disable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
 			// +
