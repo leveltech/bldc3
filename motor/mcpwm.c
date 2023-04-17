@@ -2695,86 +2695,63 @@ static void set_switching_frequency(float frequency) {
 }
 
 static void set_next_comm_step(int next_step) {
-	if (conf->motor_type == MOTOR_TYPE_DC) {
-		switch (next_step % 3) {
-		case 0:
-			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+    static bool invert_duty_cycle = false;
 
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+    if (conf->motor_type == MOTOR_TYPE_DC) {
+        invert_duty_cycle = !invert_duty_cycle;
 
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
-			break;
+        // 0
+        TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+        TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+        TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
-		case 1:
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+        if (invert_duty_cycle) {
+            if (direction) {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 
-			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_PWM1);
-			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Enable);
+                // 0
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
 
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
-			break;
+                // 0
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+            }
+        } else {
+            if (direction) {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
 
-		case 2:
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 
-			// 0
-			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Disable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
-
-			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-			break;
-		}
-
-		return;
-	}
-
-	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
-	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
-
-	uint16_t positive_highside = TIM_CCx_Enable;
-	uint16_t positive_lowside = TIM_CCxN_Enable;
-
-	uint16_t negative_highside = TIM_CCx_Enable;
-	uint16_t negative_lowside = TIM_CCxN_Enable;
-
-	if (!IS_DETECTING()) {
-		switch (conf->pwm_mode) {
-		case PWM_MODE_NONSYNCHRONOUS_HISW:
-			positive_lowside = TIM_CCxN_Disable;
-			break;
-
-		case PWM_MODE_SYNCHRONOUS:
-			break;
-
-		case PWM_MODE_BIPOLAR:
-			negative_oc_mode = TIM_OCMode_PWM2;
-			break;
-		}
-	}
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+					}
+				}
+    return;
+}
 
 	if (next_step == 1) {
 		if (direction) {
