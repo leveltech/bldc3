@@ -2696,9 +2696,10 @@ static void set_switching_frequency(float frequency) {
 
 static void set_next_comm_step() {
 	if (conf->motor_type == MOTOR_TYPE_DC) {
-		static int current_step = 0;
+		static int iterator = 0;
+		iterator = (iterator + 1) % 3;
 
-		switch (current_step % 3) {
+		switch (iterator) {
 		case 0:
 			// +
 			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
@@ -2717,7 +2718,7 @@ static void set_next_comm_step() {
 			break;
 
 		case 1:
-			// 00
+			// 0
 			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
 			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
@@ -2751,7 +2752,6 @@ static void set_next_comm_step() {
 			break;
 		}
 
-		current_step++;
 		return;
 	}
 
