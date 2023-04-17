@@ -2694,7 +2694,7 @@ static void set_switching_frequency(float frequency) {
 	set_next_timer_settings(&timer_tmp);
 }
 
-static void set_next_comm_step() {
+static void set_next_comm_step(int next_step) {
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		static int iterator = 0;
 		iterator = (iterator + 1) % 3;
