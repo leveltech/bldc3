@@ -2717,7 +2717,7 @@ static void set_next_comm_step() {
 			break;
 
 		case 1:
-			// 0
+			// 00
 			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
 			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
