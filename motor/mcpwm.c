@@ -2699,7 +2699,7 @@ static void set_next_comm_step(int next_step) {
     static int invert_counter = 0;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 10) {
+        if (invert_counter == 6) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
