@@ -1370,28 +1370,28 @@ static THD_FUNCTION(timer_thread, arg) {
 	float amp;
 	float min_s;
 	float max_s;
-	int cycle_count = 0;
 
 	for(;;) {
-    	if (timer_thd_stop) {
-        	timer_thd_stop = false;
-        	return;
-    	}
+		if (timer_thd_stop) {
+			timer_thd_stop = false;
+			return;
+		}
 
-    	if (state == MC_STATE_OFF) {
-        	// Track the motor back-emf and follow it with dutycycle_now. Also track
-        	// the direction of the motor.
-        	amp = filter_run_fir_iteration((float*)amp_fir_samples,
-                (float*)amp_fir_coeffs, AMP_FIR_TAPS_BITS, amp_fir_index);
+		if (state == MC_STATE_OFF) {
+			// Track the motor back-emf and follow it with dutycycle_now. Also track
+			// the direction of the motor.
+			amp = filter_run_fir_iteration((float*)amp_fir_samples,
+					(float*)amp_fir_coeffs, AMP_FIR_TAPS_BITS, amp_fir_index);
 
-        	// Direction tracking
-            if (conf->motor_type == MOTOR_TYPE_DC) {
-                cycle_count++;
-                if (cycle_count >= 6) {
-                    direction = (direction == 0) ? 1 : 0;
-                    cycle_count = 0;
-                }
-        	} else {
+			// Direction tracking
+			if (conf->motor_type == MOTOR_TYPE_DC) {
+				if (amp > 0) {
+					direction = 0;
+				} else {
+					direction = 1;
+					amp = -amp;
+				}
+			} else {
 				if (sensorless_now) {
 					min_s = 9999999999999.0;
 					max_s = 0.0;
@@ -2111,14 +2111,15 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		}
 
 		// Don't start in the opposite direction when the RPM is too high even if the current is low enough.
-		if (conf->motor_type != MOTOR_TYPE_DC) {
-			const float rpm = mcpwm_get_rpm();
-			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
-				dutycycle_now = -conf->l_min_duty;
-			} else if (dutycycle_now <= -conf->l_min_duty && rpm > conf->l_max_erpm_fbrake) {
-				dutycycle_now = conf->l_min_duty;
-			}
-		}
+
+///		if (conf->motor_type != MOTOR_TYPE_DC) {
+///			const float rpm = mcpwm_get_rpm();
+///			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
+///				dutycycle_now = -conf->l_min_duty;
+///			} else if (dutycycle_now <= -conf->l_min_duty && rpm > conf->l_max_erpm_fbrake) {
+///				dutycycle_now = conf->l_min_duty;
+///			}
+///		}
 
 		set_duty_cycle_ll(dutycycle_now);
 	}
@@ -2694,36 +2695,72 @@ static void set_switching_frequency(float frequency) {
 }
 
 static void set_next_comm_step(int next_step) {
-	if (conf->motor_type == MOTOR_TYPE_DC) {
-		// 0
-		TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-		TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
-		TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+    static bool invert_duty_cycle = false;
+    static int invert_counter = 0;
 
-		if (direction) {
-			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+    if (conf->motor_type == MOTOR_TYPE_DC) {
+        if (invert_counter == 4) {
+            invert_duty_cycle = !invert_duty_cycle;
+            invert_counter = 0;
+        } else {
+            invert_counter++;
+        }
 
-			// -
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-		} else {
-			// +
-			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
-			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+        // 0
+        TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+        TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+        TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
-			// -
-			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-		}
+        if (invert_duty_cycle) {
+            // Inverted duty cycle
+            if (direction) {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 
-		return;
-	}
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+            }
+        } else {
+            // Regular duty cycle
+            if (direction) {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+            	}
+        	}
+    return;
+}
+
 
 	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
 	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
