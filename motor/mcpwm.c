@@ -2756,9 +2756,8 @@ static void set_next_comm_step(int next_step) {
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-            }
-        }
-    }
+            	}
+        	}
     return;
 }
 
