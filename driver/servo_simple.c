@@ -43,7 +43,6 @@ void servo_simple_init(void) {
 
 	HW_ICU_TIM_CLK_EN();
 
-	TIM_TimeBaseStructure.TIM_Period = (uint16_t)((uint32_t)TIM_CLOCK / (uint32_t)SERVO_OUT_RATE_HZ);
 	TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t)((168000000 / 2) / TIM_CLOCK) - 1;
 	TIM_TimeBaseStructure.TIM_ClockDivision = 0;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -65,7 +64,7 @@ void servo_simple_init(void) {
 
 	TIM_ARRPreloadConfig(HW_ICU_TIMER, ENABLE);
 
-	servo_simple_set_output(0.5);
+	servo_simple_set_output(0.0);
 
 	TIM_Cmd(HW_ICU_TIMER, ENABLE);
 
@@ -86,21 +85,19 @@ bool servo_simple_is_running(void) {
 }
 
 void servo_simple_set_output(float out) {
-    utils_truncate_number(&out, 0.0, 1.0);
+	utils_truncate_number(&out, 0.0, 1.0);
 
-    if (out == 0.0) {
-        if (m_is_running) {
-            servo_simple_stop();
-        }
-    } else {
-        if (!m_is_running) {
-            servo_simple_init();
-        }
+	if (!m_is_running || out == 0.0) {
+		// Disable the output
+		TIM_OC1Init(HW_ICU_TIMER, &(TIM_OCInitTypeDef){0});
+		TIM_OC2Init(HW_ICU_TIMER, &(TIM_OCInitTypeDef){0});
+		return;
+	}
 
-        uint32_t freq = (uint32_t)(BEEPER_FREQ_MIN_HZ + out * (BEEPER_FREQ_MAX_HZ - BEEPER_FREQ_MIN_HZ));
-        uint32_t period = (uint32_t)(TIM_CLOCK / freq);
+	uint32_t freq = (uint32_t)(SERVO_OUT_FREQ_MIN_HZ + out * (SERVO_OUT_FREQ_MAX_HZ - SERVO_OUT_FREQ_MIN_HZ));
+	HW_ICU_TIMER->ARR = (uint32_t)(TIM_CLOCK / freq) - 1;
+	HW_ICU_TIMER->CCR1 = (uint16_t)(HW_ICU_TIMER->ARR / 2);
+	HW_ICU_TIMER->CCR2 = (uint16_t)(HW_ICU_TIMER->ARR / 2);
 
-        HW_ICU_TIMER->ARR = period - 1;
-        HW_ICU_TIMER->CCR1 = period / 2; // 50% duty cycle
-    }
+	TIM_GenerateEvent(HW_ICU_TIMER, TIM_EventSource_Update);
 }
