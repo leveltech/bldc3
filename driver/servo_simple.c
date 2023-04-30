@@ -99,12 +99,18 @@ void servo_simple_set_output(float out) {
 
 	// Adjust Timer period for the desired frequency
 	uint32_t period = (uint32_t)(TIM_CLOCK / freq);
+	
+	TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure; // Declare the structure locally
 	TIM_TimeBaseStructure.TIM_Period = (uint16_t)period;
+	TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t)((168000000 / 2) / TIM_CLOCK) - 1;
+	TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
 
 	// Reinitialize Timer with the new Period value
 	TIM_TimeBaseInit(HW_ICU_TIMER, &TIM_TimeBaseStructure);
 
-	if (out == 0.0) {		// To silence the beeper, set duty cycle to 0
+	if (out == 0.0) {
+		// To silence the beeper, set duty cycle to 0
 		TIM_OCInitStructure.TIM_Pulse = 0;
 	} else {
 		// Otherwise, set the duty cycle to 50% for a square wave
