@@ -29,7 +29,7 @@
  */
 
 // Settings
-#define TIM_CLOCK			1000000 // Hz
+#define TIM_CLOCK			168000000 // Hz
 
 // Private variables
 static volatile bool m_is_running = false;
@@ -86,28 +86,36 @@ bool servo_simple_is_running(void) {
 }
 
 void servo_simple_set_output(float out) {
-    if (!m_is_running) {
-        return;
-    }
+	if (!m_is_running) {
+		return;
+	}
 
-    utils_truncate_number(&out, 0.0, 1.0);
+	utils_truncate_number(&out, 0.0, 1.0);
 
-    if (out == 0.0) {
-        // Disable Timer Output Compare to silence the beeper
-        if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
-            TIM_OC1Init(HW_ICU_TIMER, NULL);
-        } else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
-            TIM_OC2Init(HW_ICU_TIMER, NULL);
-        }
-    } else {
-        float us = (float)SERVO_OUT_PULSE_MIN_US + out *
-                (float)(SERVO_OUT_PULSE_MAX_US - SERVO_OUT_PULSE_MIN_US);
-        us *= (float)TIM_CLOCK / 1000000.0;
+	// Calculate the frequency for the output square wave.
+	// This will interpolate between 0Hz and 5000Hz based on 'out'.
+	float freq = (float)SERVO_OUT_PULSE_MIN_US + out *
+			(float)(SERVO_OUT_PULSE_MAX_US - SERVO_OUT_PULSE_MIN_US);
 
-        if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
-            HW_ICU_TIMER->CCR1 = (uint32_t)us;
-        } else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
-            HW_ICU_TIMER->CCR2 = (uint32_t)us;
-        }
-    }
+	// Adjust Timer period for the desired frequency
+	uint32_t period = (uint32_t)(TIM_CLOCK / freq);
+	TIM_TimeBaseStructure.TIM_Period = (uint16_t)period;
+
+	// Reinitialize Timer with the new Period value
+	TIM_TimeBaseInit(HW_ICU_TIMER, &TIM_TimeBaseStructure);
+
+	if (out == 0.0) {		// To silence the beeper, set duty cycle to 0
+		TIM_OCInitStructure.TIM_Pulse = 0;
+	} else {
+		// Otherwise, set the duty cycle to 50% for a square wave
+		TIM_OCInitStructure.TIM_Pulse = period / 2;
+	}
+
+	if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
+		TIM_OC1Init(HW_ICU_TIMER, &TIM_OCInitStructure);
+		TIM_OC1PreloadConfig(HW_ICU_TIMER, TIM_OCPreload_Enable);
+	} else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
+		TIM_OC2Init(HW_ICU_TIMER, &TIM_OCInitStructure);
+		TIM_OC2PreloadConfig(HW_ICU_TIMER, TIM_OCPreload_Enable);
+	}
 }

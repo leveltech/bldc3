@@ -24,7 +24,7 @@
 #define FW_VERSION_MAJOR			6
 #define FW_VERSION_MINOR			02
 // Set to 0 for building a release and iterate during beta test builds
-#define FW_TEST_VERSION_NUMBER		2
+#define FW_TEST_VERSION_NUMBER		3
 
 #include "datatypes.h"
 
@@ -111,9 +111,9 @@
 /*
  * Servo output driver
  */
-#define SERVO_OUT_PULSE_MIN_US		100	// Minimum pulse length in microseconds
-#define SERVO_OUT_PULSE_MAX_US		250	// Maximum pulse length in microseconds
-#define SERVO_OUT_RATE_HZ			10000		// Update rate in Hz
+#define SERVO_OUT_PULSE_MIN_US		0	// Minimum pulse length in microseconds
+#define SERVO_OUT_PULSE_MAX_US		5000	// Maximum pulse length in microseconds
+#define SERVO_OUT_RATE_HZ			50		// Update rate in Hz
 
 // Correction factor for computations that depend on the old resistor division factor
 #define VDIV_CORR					((VIN_R2 / (VIN_R2 + VIN_R1)) / (2.2 / (2.2 + 33.0)))
