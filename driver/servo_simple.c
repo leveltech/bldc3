@@ -86,19 +86,28 @@ bool servo_simple_is_running(void) {
 }
 
 void servo_simple_set_output(float out) {
-	if (!m_is_running) {
-		return;
-	}
+    if (!m_is_running) {
+        return;
+    }
 
-	utils_truncate_number(&out, 0.0, 1.0);
+    utils_truncate_number(&out, 0.0, 1.0);
 
-	float us = (float)SERVO_OUT_PULSE_MIN_US + out *
-			(float)(SERVO_OUT_PULSE_MAX_US - SERVO_OUT_PULSE_MIN_US);
-	us *= (float)TIM_CLOCK / 1000000.0;
+    if (out == 0.0) {
+        // Disable Timer Output Compare to silence the beeper
+        if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
+            TIM_OC1Init(HW_ICU_TIMER, NULL);
+        } else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
+            TIM_OC2Init(HW_ICU_TIMER, NULL);
+        }
+    } else {
+        float us = (float)SERVO_OUT_PULSE_MIN_US + out *
+                (float)(SERVO_OUT_PULSE_MAX_US - SERVO_OUT_PULSE_MIN_US);
+        us *= (float)TIM_CLOCK / 1000000.0;
 
-	if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
-		HW_ICU_TIMER->CCR1 = (uint32_t)us;
-	} else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
-		HW_ICU_TIMER->CCR2 = (uint32_t)us;
-	}
+        if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
+            HW_ICU_TIMER->CCR1 = (uint32_t)us;
+        } else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
+            HW_ICU_TIMER->CCR2 = (uint32_t)us;
+        }
+    }
 }
