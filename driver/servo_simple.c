@@ -85,19 +85,22 @@ bool servo_simple_is_running(void) {
 	return m_is_running;
 }
 
-void servo_simple_set_output(float freq_factor) {
-	if (!m_is_running) {
-		return;
-	}
+void servo_simple_set_output(float out) {
+    utils_truncate_number(&out, 0.0, 1.0);
 
-	// Map freq_factor from range [0.0, 1.0] to range [0, 10000]
-	utils_truncate_number(&freq_factor, 0.0, 1.0);
-	float freq = freq_factor * 10000.0;
+    if (out == 0.0) {
+        if (m_is_running) {
+            servo_simple_stop();
+        }
+    } else {
+        if (!m_is_running) {
+            servo_simple_init();
+        }
 
-	// Calculate the period for the desired frequency
-	uint16_t period = (uint16_t)(TIM_CLOCK / freq);
+        uint32_t freq = (uint32_t)(BEEPER_FREQ_MIN_HZ + out * (BEEPER_FREQ_MAX_HZ - BEEPER_FREQ_MIN_HZ));
+        uint32_t period = (uint32_t)(TIM_CLOCK / freq);
 
-	// Set the period and reload the counter
-	HW_ICU_TIMER->ARR = period;
-	HW_ICU_TIMER->EGR = TIM_EGR_UG;
+        HW_ICU_TIMER->ARR = period - 1;
+        HW_ICU_TIMER->CCR1 = period / 2; // 50% duty cycle
+    }
 }
