@@ -29,7 +29,7 @@
  */
 
 // Settings
-#define TIM_CLOCK			168000000 // Hz
+#define TIM_CLOCK			1000000 // Hz
 
 // Private variables
 static volatile bool m_is_running = false;
@@ -85,43 +85,19 @@ bool servo_simple_is_running(void) {
 	return m_is_running;
 }
 
-void servo_simple_set_output(float out) {
+void servo_simple_set_output(float freq_factor) {
 	if (!m_is_running) {
 		return;
 	}
 
-	utils_truncate_number(&out, 0.0, 1.0);
+	// Map freq_factor from range [0.0, 1.0] to range [0, 10000]
+	utils_truncate_number(&freq_factor, 0.0, 1.0);
+	float freq = freq_factor * 10000.0;
 
-	// Calculate the frequency for the output square wave.
-	// This will interpolate between 0Hz and 5000Hz based on 'out'.
-	float freq = (float)SERVO_OUT_PULSE_MIN_US + out *
-			(float)(SERVO_OUT_PULSE_MAX_US - SERVO_OUT_PULSE_MIN_US);
+	// Calculate the period for the desired frequency
+	uint16_t period = (uint16_t)(TIM_CLOCK / freq);
 
-	// Adjust Timer period for the desired frequency
-	uint32_t period = (uint32_t)(TIM_CLOCK / freq);
-	
-	TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure; // Declare the structure locally
-	TIM_TimeBaseStructure.TIM_Period = (uint16_t)period;
-	TIM_TimeBaseStructure.TIM_Prescaler = (uint16_t)((168000000 / 2) / TIM_CLOCK) - 1;
-	TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-
-	// Reinitialize Timer with the new Period value
-	TIM_TimeBaseInit(HW_ICU_TIMER, &TIM_TimeBaseStructure);
-
-	if (out == 0.0) {
-		// To silence the beeper, set duty cycle to 0
-		TIM_OCInitStructure.TIM_Pulse = 0;
-	} else {
-		// Otherwise, set the duty cycle to 50% for a square wave
-		TIM_OCInitStructure.TIM_Pulse = period / 2;
-	}
-
-	if (HW_ICU_CHANNEL == ICU_CHANNEL_1) {
-		TIM_OC1Init(HW_ICU_TIMER, &TIM_OCInitStructure);
-		TIM_OC1PreloadConfig(HW_ICU_TIMER, TIM_OCPreload_Enable);
-	} else if (HW_ICU_CHANNEL == ICU_CHANNEL_2) {
-		TIM_OC2Init(HW_ICU_TIMER, &TIM_OCInitStructure);
-		TIM_OC2PreloadConfig(HW_ICU_TIMER, TIM_OCPreload_Enable);
-	}
+	// Set the period and reload the counter
+	HW_ICU_TIMER->ARR = period;
+	HW_ICU_TIMER->EGR = TIM_EGR_UG;
 }
