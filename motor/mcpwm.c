@@ -77,6 +77,7 @@ static volatile int ignore_iterations;
 static volatile mc_timer_struct timer_struct;
 static volatile int curr_samp_volt; // Use the voltage-synchronized samples for this current sample
 static int hall_to_phase_table[16];
+static int invert_counter = 0;
 static volatile unsigned int slow_ramping_cycles;
 static volatile int has_commutated;
 static volatile mc_rpm_dep_struct rpm_dep;
@@ -994,6 +995,11 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	}
 
 	dutycycle_set = dutyCycle;
+
+ // Reset invert_counter when dutyCycle is zero
+    if (dutyCycle == 0.0f) {
+        invert_counter = 0;
+    }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -2696,7 +2702,6 @@ static void set_switching_frequency(float frequency) {
 
 static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
-    static int invert_counter = 0;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
         if (invert_counter == 4) {
