@@ -49,6 +49,8 @@ typedef struct {
 } mc_timer_struct;
 
 // Private variables
+static int invert_counter = 0;
+static bool invert_duty_cycle = false;
 static volatile int comm_step; // Range [1 6]
 static volatile int detect_step; // Range [0 5]
 static volatile int direction;
@@ -133,8 +135,7 @@ volatile float mcpwm_detect_currents[6];
 volatile float mcpwm_detect_voltages[6];
 volatile float mcpwm_detect_currents_diff[6];
 volatile int mcpwm_vzero;
-int invert_counter = 0;
-bool invert_duty_cycle = false;
+
 
 // Private functions
 static void set_duty_cycle_hl(float dutyCycle);
@@ -2701,8 +2702,21 @@ static void set_switching_frequency(float frequency) {
 	update_adc_sample_pos(&timer_tmp);
 	set_next_timer_settings(&timer_tmp);
 }
+// Time of last function call
+static uint32_t last_call_time = 0;
 
-static void set_next_comm_step(int next_step) { 
+static void set_next_comm_step(int next_step) {
+    // Get the current time
+    uint32_t current_time = timer_time_now();
+    
+    if (current_time - last_call_time > 500000) {  // 0.5 sec
+        // Reset invert_counter and direction if more than 0.5 seconds have passed
+        invert_counter = 0;
+        direction = 0; // assuming 0 is the default state for direction
+    }
+
+    last_call_time = current_time; // update the time of last call
+
     if (conf->motor_type == MOTOR_TYPE_DC) {
         if (invert_counter == 10) {
             invert_duty_cycle = !invert_duty_cycle;
