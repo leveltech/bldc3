@@ -50,7 +50,6 @@ typedef struct {
 
 // Private variables
 static int invert_counter = 0;
-static bool invert_duty_cycle = false;
 static volatile int comm_step; // Range [1 6]
 static volatile int detect_step; // Range [0 5]
 static volatile int direction;
@@ -997,12 +996,6 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	}
 
 	dutycycle_set = dutyCycle;
-
- // Reset invert_counter when dutyCycle is zero
-    if (dutyCycle == 0.0f) {
-        invert_counter = 0;
-		inverted = false;	// Inverting not supported for the first cycle. Will be set to true later.
-    }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -2706,7 +2699,7 @@ static void set_switching_frequency(float frequency) {
 static uint32_t last_call_time = 0;
 
 static void set_next_comm_step(int next_step) {
-    // Get the current time
+    static bool invert_duty_cycle = false;
     uint32_t current_time = timer_time_now();
     
     if (current_time - last_call_time > 500000) {  // 0.5 sec
