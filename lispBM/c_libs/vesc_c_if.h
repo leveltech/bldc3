@@ -17,6 +17,20 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+
+The library provides a wide range of functionality, from motor control to communication protocols and other utility functions.
+
+The library contains various modules and functions for motor control, communication (CAN bus and UART), 
+packet handling, IMU (Inertial Measurement Unit) integration, GNSS (Global Navigation Satellite System) support, and other utility functions. 
+It also provides an interface for custom configurations and extensions.
+
+The code is structured as a set of function pointers in a struct called `vesc_c_if`, which is stored at a fixed memory location (0x1000F800). 
+This struct contains pointers to various functions, structures, and variables provided by the VESC library. 
+These pointers can be used by external code to interact with the library, enabling developers to build their own applications or extensions on top of the VESC system.
+
+*/
+
 #ifndef VESC_C_IF_H
 #define VESC_C_IF_H
 

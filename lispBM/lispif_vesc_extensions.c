@@ -25,6 +25,7 @@
 #include "extensions/string_extensions.h"
 #include "lbm_constants.h"
 
+#include "mcpwm.h"
 #include "commands.h"
 #include "mc_interface.h"
 #include "timeout.h"
@@ -56,6 +57,8 @@
 #include <stdarg.h>
 
 typedef struct {
+	lbm_uint cycle_over;
+	
 	// BMS
 	lbm_uint v_tot;
 	lbm_uint v_charge;
@@ -195,7 +198,9 @@ static bool get_add_symbol(char *name, lbm_uint* id) {
 
 static bool compare_symbol(lbm_uint sym, lbm_uint *comp) {
 	if (*comp == 0) {
-		if (comp == &syms_vesc.v_tot) {
+		if (comp == &syms_vesc.cycle_over) {
+			get_add_symbol("cycle-over", comp);	
+		} else if (comp == &syms_vesc.v_tot) {
 			get_add_symbol("bms-v-tot", comp);
 		} else if (comp == &syms_vesc.v_charge) {
 			get_add_symbol("bms-v-charge", comp);
@@ -553,6 +558,21 @@ static lbm_value get_or_set_bool(bool set, bool *val, lbm_value *lbm_val) {
 	} else {
 		return lbm_enc_i(*val);
 	}
+}
+
+
+static lbm_value ext_cycle_over(lbm_value *args, lbm_uint argn) {
+    (void)args; // To avoid unused variable warning
+    (void)argn; 
+
+    // Reset invert_counter and invert_duty_cycle
+    invert_counter = 0;
+    invert_duty_cycle = false;
+
+    // Set debug sampling mode to DEBUG_SAMPLING_START
+    m_sample_mode = DEBUG_SAMPLING_START;
+
+    return ENC_SYM_TRUE;
 }
 
 static lbm_value get_set_bms_val(bool set, lbm_value *args, lbm_uint argn) {
