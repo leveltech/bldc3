@@ -49,7 +49,6 @@ typedef struct {
 } mc_timer_struct;
 
 // Private variables
-static int invert_counter = 0;
 static volatile int comm_step; // Range [1 6]
 static volatile int detect_step; // Range [0 5]
 static volatile int direction;
@@ -78,6 +77,7 @@ static volatile int ignore_iterations;
 static volatile mc_timer_struct timer_struct;
 static volatile int curr_samp_volt; // Use the voltage-synchronized samples for this current sample
 static int hall_to_phase_table[16];
+static int invert_counter = 0;
 static volatile unsigned int slow_ramping_cycles;
 static volatile int has_commutated;
 static volatile mc_rpm_dep_struct rpm_dep;
@@ -134,7 +134,6 @@ volatile float mcpwm_detect_currents[6];
 volatile float mcpwm_detect_voltages[6];
 volatile float mcpwm_detect_currents_diff[6];
 volatile int mcpwm_vzero;
-
 
 // Private functions
 static void set_duty_cycle_hl(float dutyCycle);
@@ -996,6 +995,11 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	}
 
 	dutycycle_set = dutyCycle;
+
+ // Reset invert_counter when dutyCycle is zero
+    if (dutyCycle == 0.0f) {
+        invert_counter = 0;
+    }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -2695,23 +2699,12 @@ static void set_switching_frequency(float frequency) {
 	update_adc_sample_pos(&timer_tmp);
 	set_next_timer_settings(&timer_tmp);
 }
-// Time of last function call
-static uint32_t last_call_time = 0;
 
 static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
-    uint32_t current_time = timer_time_now();
-    
-    if (current_time - last_call_time > 500000) {  // 0.5 sec
-        // Reset invert_counter and direction if more than 0.5 seconds have passed
-        invert_counter = 0;
-        direction = 0; // assuming 0 is the default state for direction
-    }
-
-    last_call_time = current_time; // update the time of last call
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 10) {
+        if (invert_counter == 4) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
