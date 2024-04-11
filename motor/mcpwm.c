@@ -2704,7 +2704,7 @@ static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 4) {
+        if (invert_counter == 8) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
