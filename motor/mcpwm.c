@@ -997,9 +997,9 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	dutycycle_set = dutyCycle;
 
  // Reset invert_counter when dutyCycle is zero
-    if (dutyCycle == 0.0f) {
-        invert_counter = 0;
-    }
+ //   if (dutyCycle == 0.0f) {
+ //      invert_counter = 0;
+ //   }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -2704,7 +2704,7 @@ static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 64) {
+        if (invert_counter == 256) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
