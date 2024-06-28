@@ -1138,7 +1138,7 @@ static void set_duty_cycle_hw(float dutyCycle) {
 	utils_truncate_number(&dutyCycle, conf->l_min_duty, conf->l_max_duty);
 
 	if (conf->motor_type == MOTOR_TYPE_DC) {
-		switching_frequency_now = conf->m_dc_f_sw;
+		switching_frequency_now = conf->m_dc_f_sw * 0.1;
 	} else {
 		if (IS_DETECTING() || conf->pwm_mode == PWM_MODE_BIPOLAR) {
 			switching_frequency_now = conf->m_bldc_f_sw_max;
@@ -2704,8 +2704,12 @@ static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        invert_duty_cycle = !invert_duty_cycle;
-			
+        if (invert_counter == 5) {
+            invert_duty_cycle = !invert_duty_cycle;
+            invert_counter = 0;
+        } else {
+            invert_counter++;
+        }
         // 0
         TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
         TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
