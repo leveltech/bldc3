@@ -2700,10 +2700,14 @@ static void set_switching_frequency(float frequency) {
 	set_next_timer_settings(&timer_tmp);
 }
 
+<<<<<<< HEAD
 static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
+=======
+if (conf->motor_type == MOTOR_TYPE_DC) {
+>>>>>>> fca06f979804451c2730be2c545f2597765cc80f
         if (invert_counter == 4) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
@@ -2715,7 +2719,6 @@ static void set_next_comm_step(int next_step) {
         TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
         TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
         TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
-
         if (invert_duty_cycle) {
             // Inverted duty cycle
             if (direction) {
@@ -2723,7 +2726,6 @@ static void set_next_comm_step(int next_step) {
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
@@ -2733,7 +2735,10 @@ static void set_next_comm_step(int next_step) {
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+<<<<<<< HEAD
 
+=======
+>>>>>>> fca06f979804451c2730be2c545f2597765cc80f
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
@@ -2746,7 +2751,10 @@ static void set_next_comm_step(int next_step) {
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+<<<<<<< HEAD
 
+=======
+>>>>>>> fca06f979804451c2730be2c545f2597765cc80f
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
@@ -2756,16 +2764,23 @@ static void set_next_comm_step(int next_step) {
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+<<<<<<< HEAD
 
+=======
+>>>>>>> fca06f979804451c2730be2c545f2597765cc80f
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+<<<<<<< HEAD
             	}
         	}
+=======
+             }
+         }
+>>>>>>> fca06f979804451c2730be2c545f2597765cc80f
     return;
 }
-
 
 	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
 	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
