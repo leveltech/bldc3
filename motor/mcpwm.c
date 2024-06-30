@@ -1138,7 +1138,7 @@ static void set_duty_cycle_hw(float dutyCycle) {
 	utils_truncate_number(&dutyCycle, conf->l_min_duty, conf->l_max_duty);
 
 	if (conf->motor_type == MOTOR_TYPE_DC) {
-		switching_frequency_now = conf->m_dc_f_sw * 0.1;
+		switching_frequency_now = conf->m_dc_f_sw;
 	} else {
 		if (IS_DETECTING() || conf->pwm_mode == PWM_MODE_BIPOLAR) {
 			switching_frequency_now = conf->m_bldc_f_sw_max;
