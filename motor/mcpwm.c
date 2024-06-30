@@ -997,9 +997,9 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	dutycycle_set = dutyCycle;
 
  // Reset invert_counter when dutyCycle is zero
- //   if (dutyCycle == 0.0f) {
- //      invert_counter = 0;
- //   }
+    if (dutyCycle == 0.0f) {
+        invert_counter = 0;
+    }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -2704,18 +2704,21 @@ static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 5) {
+        if (invert_counter == 4) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
             invert_counter++;
         }
+
         // 0
         TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
         TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
         TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
         if (invert_duty_cycle) {
+            // Inverted duty cycle
+            if (direction) {
                 // +
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
@@ -2726,15 +2729,39 @@ static void set_next_comm_step(int next_step) {
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
             } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
-			     // +
+            }
+        } else {
+            // Regular duty cycle
+            if (direction) {
+                // +
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+            	}
         	}
     return;
 }
