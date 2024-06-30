@@ -2700,11 +2700,8 @@ static void set_switching_frequency(float frequency) {
 	set_next_timer_settings(&timer_tmp);
 }
 
-static void set_next_comm_step(int next_step) {
-    static bool invert_duty_cycle = false;
-
-    if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 5) {
+if (conf->motor_type == MOTOR_TYPE_DC) {
+        if (invert_counter == 4) {
             invert_duty_cycle = !invert_duty_cycle;
             invert_counter = 0;
         } else {
@@ -2714,31 +2711,51 @@ static void set_next_comm_step(int next_step) {
         TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
         TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
         TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
-
         if (invert_duty_cycle) {
+            // Inverted duty cycle
+            if (direction) {
                 // +
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
             } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
                 // -
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
-			     // +
+            }
+        } else {
+            // Regular duty cycle
+            if (direction) {
+                // +
                 TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-        	}
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+            } else {
+                // +
+                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+                // -
+                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+             }
+         }
     return;
 }
-
 
 	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
 	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
