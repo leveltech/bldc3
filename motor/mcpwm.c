@@ -531,39 +531,6 @@ void mcpwm_init_hall_table(int8_t *table) {
 	}
 }
 
-static void do_dc_cal(void) {
-	DCCAL_ON();
-
-	// Wait max 5 seconds
-	int cnt = 0;
-	while(IS_DRV_FAULT()){
-		chThdSleepMilliseconds(1);
-		cnt++;
-		if (cnt > 5000) {
-			break;
-		}
-	};
-
-	chThdSleepMilliseconds(1000);
-	curr0_sum = 0;
-	curr1_sum = 0;
-
-#ifdef HW_HAS_3_SHUNTS
-	curr2_sum = 0;
-#endif
-
-	curr_start_samples = 0;
-	while(curr_start_samples < 4000) {};
-	curr0_offset = curr0_sum / curr_start_samples;
-	curr1_offset = curr1_sum / curr_start_samples;
-
-#ifdef HW_HAS_3_SHUNTS
-	curr2_offset = curr2_sum / curr_start_samples;
-#endif
-
-	DCCAL_OFF();
-	dccal_done = true;
-}
 
 static void pll_run(float phase, float dt, volatile float *phase_var,
 		volatile float *speed_var) {
