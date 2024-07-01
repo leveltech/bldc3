@@ -1393,9 +1393,9 @@ static THD_FUNCTION(timer_thread, arg) {
 			if (conf->motor_type == MOTOR_TYPE_DC) {
 				if (mcpwm_get_tot_current_filtered() > 0) {
 					direction = 0;
-					amp = -amp;
 				} else {
 					direction = 1;
+					amp = -amp;
 				}
 			} else {
 				if (sensorless_now) {
@@ -2702,14 +2702,28 @@ static void set_switching_frequency(float frequency) {
 
 static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
+    static int peak_count = 0;
+	static int zero_cross = 0; 
+    const float current_filtered = mcpwm_get_tot_current_filtered();
 
+    // Only apply inversion logic in DC mode 
     if (conf->motor_type == MOTOR_TYPE_DC) {
-        if (invert_counter == 52) {
-            invert_duty_cycle = !invert_duty_cycle;
-            invert_counter = 0;
+        // Check if current is near the peak (within a small tolerance)
+        if (fabsf(current_filtered - current_set) < (fabsf(current_set) * 0.05)) { 
+            peak_count++;
         } else {
-            invert_counter++;
+            peak_count = 0;
         }
+
+        // Invert when near peak for a minimum number of cycles
+        if (peak_count >= 2) { // Adjust the minimum count as needed
+            invert_duty_cycle = !invert_duty_cycle;
+            peak_count = 0; // Reset peak counter
+        }
+		
+		if (direction) {
+			invert_duty_cycle = !invert_duty_cycle;
+		}
 
         // 0
         TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
@@ -2718,7 +2732,6 @@ static void set_next_comm_step(int next_step) {
 
         if (invert_duty_cycle) {
             // Inverted duty cycle
-            if (direction) {
                 // +
                 TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
@@ -2739,32 +2752,8 @@ static void set_next_comm_step(int next_step) {
                 TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
                 TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
             }
-        } else {
-            // Regular duty cycle
-            if (direction) {
-                // +
-                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
-                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-
-                // -
-                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-            } else {
-                // +
-                TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
-                TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-                TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
-                // -
-                TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-                TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-                TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-            	}
-        	}
     return;
-}
+	}
 
 
 	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
