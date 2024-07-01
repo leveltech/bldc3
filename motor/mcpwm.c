@@ -1391,7 +1391,7 @@ static THD_FUNCTION(timer_thread, arg) {
 
 			// Direction tracking
 			if (conf->motor_type == MOTOR_TYPE_DC) {
-				if (amp > 0) {
+				if (mcpwm_get_tot_current_filtered() > 0) {
 					direction = 0;
 				} else {
 					direction = 1;
