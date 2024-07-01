@@ -153,6 +153,7 @@ static void update_adc_sample_pos(mc_timer_struct *timer_tmp);
 static void commutate(int steps);
 static void set_next_timer_settings(mc_timer_struct *settings);
 static void update_timer_attempt(void);
+static void set_switching_frequency(float frequency);
 static void do_dc_cal(void);
 static void pll_run(float phase, float dt, volatile float *phase_var,
 		volatile float *speed_var);
