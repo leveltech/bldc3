@@ -2716,7 +2716,7 @@ static void set_next_comm_step(int next_step) {
         }
 
         // Invert when near peak for a minimum number of cycles
-        if (peak_count >= 5) { // Adjust the minimum count as needed
+        if (peak_count >= 50) { // Adjust the minimum count as needed
             invert_duty_cycle = !invert_duty_cycle;
             peak_count = 0; // Reset peak counter
         }
