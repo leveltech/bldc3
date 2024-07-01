@@ -2704,7 +2704,7 @@ static void set_next_comm_step(int next_step) {
     static bool invert_duty_cycle = false;
     static int peak_count = 0;
 	static int zero_cross = 0; 
-    const float current_filtered = mcpwm_get_tot_current_filtered();
+    const float current_filtered = mcpwm_get_tot_current();
 
     // Only apply inversion logic in DC mode 
     if (conf->motor_type == MOTOR_TYPE_DC) {
@@ -2716,7 +2716,7 @@ static void set_next_comm_step(int next_step) {
         }
 
         // Invert when near peak for a minimum number of cycles
-        if (peak_count >= 2) { // Adjust the minimum count as needed
+        if (peak_count >= 5) { // Adjust the minimum count as needed
             invert_duty_cycle = !invert_duty_cycle;
             peak_count = 0; // Reset peak counter
         }
