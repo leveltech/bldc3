@@ -153,7 +153,6 @@ static void update_adc_sample_pos(mc_timer_struct *timer_tmp);
 static void commutate(int steps);
 static void set_next_timer_settings(mc_timer_struct *settings);
 static void update_timer_attempt(void);
-static void set_switching_frequency(float frequency);
 static void do_dc_cal(void);
 static void pll_run(float phase, float dt, volatile float *phase_var,
 		volatile float *speed_var);
@@ -937,7 +936,6 @@ static void stop_pwm_hw(void) {
 
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 
-	set_switching_frequency(conf->m_bldc_f_sw_max);
 }
 
 static void full_brake_ll(void) {
@@ -965,7 +963,6 @@ static void full_brake_hw(void) {
 
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 
-	set_switching_frequency(conf->m_bldc_f_sw_max);
 }
 
 /**
@@ -1918,8 +1915,6 @@ void mcpwm_set_detect(void) {
 
 	control_mode = CONTROL_MODE_NONE;
 	stop_pwm_hw();
-
-	set_switching_frequency(conf->m_bldc_f_sw_max);
 
 	for(int i = 0;i < 6;i++) {
 		mcpwm_detect_currents[i] = 0;
