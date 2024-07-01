@@ -1393,9 +1393,9 @@ static THD_FUNCTION(timer_thread, arg) {
 			if (conf->motor_type == MOTOR_TYPE_DC) {
 				if (mcpwm_get_tot_current_filtered() > 0) {
 					direction = 0;
+					amp = -amp;
 				} else {
 					direction = 1;
-					amp = -amp;
 				}
 			} else {
 				if (sensorless_now) {
