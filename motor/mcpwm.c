@@ -1474,34 +1474,19 @@ void mcpwm_adc_inj_int_handler(void) {
 		curr2 = GET_CURRENT3();
 	}
 
-// DCCal current offset (run once after startup)
-static bool dccal_done = false; 
-	if (!dccal_done) {
-   		dccal_done = true;
+	static void do_dc_cal(void) {
+		DCCAL_ON();
 
-    	// Wait for any faults to clear (optional)
-    	int fault_wait_count = 0;
-    	while (mc_interface_get_fault() != FAULT_CODE_NONE && fault_wait_count < 500) {
-        	fault_wait_count++;
-        	chThdSleepMilliseconds(10); 
-   		}
-
-    	if (fault_wait_count < 500) { // Faults cleared 
-        	DCCAL_ON();
-        	chThdSleepMilliseconds(1500); // Wait for calibration
-
-        	curr0_offset = curr0_sum / curr_start_samples;
-        	curr2_offset = curr2_sum / curr_start_samples; 
-
-        	DCCAL_OFF();
-			terminal_printf("DCCAL: DC Cal Done\n");
-    	} else {
-        	// Faults were not cleared, you can handle this as needed
-        	// (e.g., log a message, set a flag, etc.)
-        	terminal_printf("DCCAL: Faults were not cleared during calibration\n");
-    	} 
+		// Wait max 5 seconds
+		int cnt = 0;
+		while(IS_DRV_FAULT()){
+			chThdSleepMilliseconds(1);
+			cnt++;
+			if (cnt > 5000) {
+				break;
+			}
+		};
 	}
-
 	curr0_sum += curr0;
 	curr2_sum += curr2; 
 
@@ -2323,27 +2308,3 @@ static void set_next_comm_step(int next_step) {
     return;
 	}
 }
-
-	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
-	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
-
-	uint16_t positive_highside = TIM_CCx_Enable;
-	uint16_t positive_lowside = TIM_CCxN_Enable;
-
-	uint16_t negative_highside = TIM_CCx_Enable;
-	uint16_t negative_lowside = TIM_CCxN_Enable;
-
-	if (!IS_DETECTING()) {
-		switch (conf->pwm_mode) {
-		case PWM_MODE_NONSYNCHRONOUS_HISW:
-			positive_lowside = TIM_CCxN_Disable;
-			break;
-
-		case PWM_MODE_SYNCHRONOUS:
-			break;
-
-		case PWM_MODE_BIPOLAR:
-			negative_oc_mode = TIM_OCMode_PWM2;
-			break;
-		}
-	}
