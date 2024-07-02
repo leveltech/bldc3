@@ -1516,9 +1516,9 @@ void mcpwm_adc_inj_int_handler(void) {
 	float curr_tot_sample = 0;
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		if (direction) {
-			curr_tot_sample = -(GET_CURRENT3() - curr2_offset) * FAC_CURRENT3;
+			curr_tot_sample = -(GET_CURRENT3() - curr2_offset) * FAC_CURRENT;
 		} else {
-			curr_tot_sample = -(GET_CURRENT1() - curr0_offset) * FAC_CURRENT1;
+			curr_tot_sample = -(GET_CURRENT1() - curr0_offset) * FAC_CURRENT;
 		}
 	}
 	last_current_sample = curr_tot_sample * FAC_CURRENT;
