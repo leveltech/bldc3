@@ -1513,8 +1513,14 @@ void mcpwm_adc_inj_int_handler(void) {
 	ADC_curr_norm_value[1] = 0; // Remove middle shunt
 	ADC_curr_norm_value[2] = curr2;
 
-	float curr_tot_sample = -(GET_CURRENT1() - curr0_offset); // Assuming shunt 0 is measured
-
+	float curr_tot_sample = 0;
+	if (conf->motor_type == MOTOR_TYPE_DC) {
+		if (direction) {
+			curr_tot_sample = -(GET_CURRENT3() - curr2_offset) * FAC_CURRENT3;
+		} else {
+			curr_tot_sample = -(GET_CURRENT1() - curr0_offset) * FAC_CURRENT1;
+		}
+	}
 	last_current_sample = curr_tot_sample * FAC_CURRENT;
 	// Filter out outliers
 	if (fabsf(last_current_sample) > (conf->l_abs_current_max * 1.2)) {
