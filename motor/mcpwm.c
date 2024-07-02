@@ -2082,25 +2082,6 @@ static int read_hall(void) {
 	return READ_HALL1() | (READ_HALL2() << 1) | (READ_HALL3() << 2);
 }
 
-/*
- * Commutation Steps FORWARDS
- * STEP		BR1		BR2		BR3
- * 1		0		+		-
- * 2		+		0		-
- * 3		+		-		0
- * 4		0		-		+
- * 5		-		0		+
- * 6		-		+		0
- *
- * Commutation Steps REVERSE (switch phase 2 and 3)
- * STEP		BR1		BR2		BR3
- * 1		0		-		+
- * 2		+		-		0
- * 3		+		0		-
- * 4		0		+		-
- * 5		-		+		0
- * 6		-		0		+
- */
 
 static void update_adc_sample_pos(mc_timer_struct *timer_tmp) {
 	volatile uint32_t duty = timer_tmp->duty;
@@ -2183,25 +2164,6 @@ static void commutate(int steps) {
 	pwm_cycles_sum = 0;
 	pwm_cycles = 0;
 
-	if (conf->motor_type == MOTOR_TYPE_BLDC && sensorless_now) {
-		comm_step += steps;
-		while (comm_step > 6) {
-			comm_step -= 6;
-		}
-		while (comm_step < 1) {
-			comm_step += 6;
-		}
-
-		update_rpm_tacho();
-
-		if (!(state == MC_STATE_RUNNING)) {
-			update_sensor_mode();
-			return;
-		}
-
-		set_next_comm_step(comm_step);
-	}
-
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 	has_commutated = 1;
 
@@ -2261,58 +2223,33 @@ static void update_timer_attempt(void) {
 }
 
 static void set_next_comm_step(int next_step) {
-    static bool invert_duty_cycle = false;
-    static int peak_count = 0;
-	static int zero_cross = 0; 
-    const float current_filtered = fabsf(last_current_sample); // Ensure positive current
+	if (conf->motor_type == MOTOR_TYPE_DC) {
+		// 0
+		TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+		TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+		TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
 
-    // Only apply inversion logic in DC mode 
-    if (conf->motor_type == MOTOR_TYPE_DC) {
-        // Check if current is near the peak (within a small tolerance)
-        if (fabsf(current_filtered - fabsf(current_set)) < (fabsf(current_set) * 0.05)) { 
-            peak_count++;
-        } else {
-            peak_count = 0;
-        }
-
-        // Invert when near peak for a minimum number of cycles
-        if (peak_count >= 50) { // Adjust the minimum count as needed
-            invert_duty_cycle = !invert_duty_cycle;
-            peak_count = 0; // Reset peak counter
-        }
-		
-		// Invert based on direction
 		if (direction) {
-			invert_duty_cycle = !invert_duty_cycle;
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+		} else {
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 		}
-
-        // 0
-        TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
-        TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
-        TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
-
-        if (invert_duty_cycle) {
-            // Inverted duty cycle
-            // +
-            TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_PWM1);
-            TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-            TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-
-            // -
-            TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
-            TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-            TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-        } else {
-            // +
-            TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_PWM1);
-            TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
-            TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Enable);
-
-            // -
-            TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
-            TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
-            TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
-        }
-    return;
+		return;
 	}
 }
