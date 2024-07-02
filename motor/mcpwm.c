@@ -1383,9 +1383,9 @@ static THD_FUNCTION(timer_thread, arg) {
 			if (conf->motor_type == MOTOR_TYPE_DC) {
 				if (mcpwm_get_tot_current_filtered() > 0) {
 					direction = 0;
+					amp = -amp;
 				} else {
 					direction = 1;
-					amp = -amp;
 				}
 			} else {
 				if (sensorless_now) {
@@ -1516,9 +1516,9 @@ void mcpwm_adc_inj_int_handler(void) {
 	float curr_tot_sample = 0;
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		if (direction) {
-			curr_tot_sample = -(GET_CURRENT1() - curr0_offset);
-		} else {
 			curr_tot_sample = -(GET_CURRENT3() - curr2_offset);
+		} else {
+			curr_tot_sample = -(GET_CURRENT1() - curr0_offset);
 		}
 	}
 	last_current_sample = curr_tot_sample * FAC_CURRENT;
