@@ -349,7 +349,6 @@ void mcpwm_init(volatile mc_configuration *configuration) {
 	ADC_Init(ADC1, &ADC_InitStructure);
 	ADC_InitStructure.ADC_ExternalTrigConvEdge = ADC_ExternalTrigConvEdge_None;
 	ADC_InitStructure.ADC_ExternalTrigConv = 0;
-	ADC_Init(ADC2, &ADC_InitStructure);
 	ADC_Init(ADC3, &ADC_InitStructure);
 
 	// Enable Vrefint channel
@@ -360,20 +359,13 @@ void mcpwm_init(volatile mc_configuration *configuration) {
 
 	// Injected channels for current measurement at end of cycle
 	ADC_ExternalTrigInjectedConvConfig(ADC1, ADC_ExternalTrigInjecConv_T1_CC4);
-	ADC_ExternalTrigInjectedConvConfig(ADC2, ADC_ExternalTrigInjecConv_T8_CC2);
-#ifdef HW_HAS_3_SHUNTS
 	ADC_ExternalTrigInjectedConvConfig(ADC3, ADC_ExternalTrigInjecConv_T8_CC3);
-#endif
+
 	ADC_ExternalTrigInjectedConvEdgeConfig(ADC1, ADC_ExternalTrigInjecConvEdge_Falling);
-	ADC_ExternalTrigInjectedConvEdgeConfig(ADC2, ADC_ExternalTrigInjecConvEdge_Falling);
-#ifdef HW_HAS_3_SHUNTS
 	ADC_ExternalTrigInjectedConvEdgeConfig(ADC3, ADC_ExternalTrigInjecConvEdge_Falling);
-#endif
+
 	ADC_InjectedSequencerLengthConfig(ADC1, HW_ADC_INJ_CHANNELS);
-	ADC_InjectedSequencerLengthConfig(ADC2, HW_ADC_INJ_CHANNELS);
-#ifdef HW_HAS_3_SHUNTS
 	ADC_InjectedSequencerLengthConfig(ADC3, HW_ADC_INJ_CHANNELS);
-#endif
 
 	hw_setup_adc_channels();
 
@@ -384,8 +376,6 @@ void mcpwm_init(volatile mc_configuration *configuration) {
 	// Enable ADC1
 	ADC_Cmd(ADC1, ENABLE);
 
-	// Enable ADC2
-	ADC_Cmd(ADC2, ENABLE);
 
 	// Enable ADC3
 	ADC_Cmd(ADC3, ENABLE);
@@ -1475,7 +1465,7 @@ void mcpwm_adc_inj_int_handler(void) {
 	int curr0 = ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_1);
 	int curr2 = ADC_GetInjectedConversionValue(ADC3, ADC_InjectedChannel_1);
 
-	int curr0_2 = ADC_GetInjectedConversionValue(ADC2, ADC_InjectedChannel_2);
+	int curr0_2 = ADC_GetInjectedConversionValue(ADC3, ADC_InjectedChannel_2);
 	int curr1_2 = ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_2);
 
 #ifdef INVERTED_SHUNT_POLARITY
