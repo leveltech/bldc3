@@ -1588,14 +1588,9 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		float ramp_step = conf->m_duty_ramp_step / (switching_frequency_now / 1000.0);
 		float ramp_step_no_lim = ramp_step;
 
-		if (slow_ramping_cycles) {
-			slow_ramping_cycles--;
-			ramp_step *= 0.1;
-		}
-
 		float dutycycle_now_tmp = dutycycle_now;
 
-		if (control_mode == CONTROL_MODE_CURRENT || control_mode == CONTROL_MODE_POS) {
+		if (control_mode == CONTROL_MODE_CURRENT) {
 			// Compute error
 			const float error = current_set - (direction ? current_nofilter : -current_nofilter);
 			float step = error * conf->cc_gain * voltage_scale;
@@ -1607,20 +1602,8 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 			// Switching frequency correction
 			step /= switching_frequency_now / 1000.0;
 
-			if (slow_ramping_cycles) {
-				slow_ramping_cycles--;
-				step *= 0.1;
-			}
+			dutycycle_now_tmp += step;
 
-			// Optionally apply startup boost.
-			if (fabsf(dutycycle_now_tmp) < start_boost) {
-				utils_step_towards(&dutycycle_now_tmp,
-						current_set > 0.0 ?
-								start_boost :
-								-start_boost, ramp_step);
-			} else {
-				dutycycle_now_tmp += step;
-			}
 
 			// Upper truncation
 			utils_truncate_number((float*)&dutycycle_now_tmp, -conf->l_max_duty, conf->l_max_duty);
