@@ -270,7 +270,7 @@
 
 // Default setting overrides
 #ifndef MCCONF_L_MIN_VOLTAGE
-#define MCCONF_L_MIN_VOLTAGE            18.0        // Minimum input voltage
+#define MCCONF_L_MIN_VOLTAGE            1.9        // Minimum input voltage
 #endif
 #ifndef MCCONF_L_MAX_VOLTAGE
 #define MCCONF_L_MAX_VOLTAGE            95.0    // Maximum input voltage
@@ -295,7 +295,7 @@
 #ifdef LFOC_IS_V3
 #define MCCONF_L_MAX_ABS_CURRENT            300.0   // The maximum absolute current above which a fault is generated
 #else
-#define MCCONF_L_MAX_ABS_CURRENT            130.0   // The maximum absolute current above which a fault is generated
+#define MCCONF_L_MAX_ABS_CURRENT            200   // The maximum absolute current above which a fault is generated
 #endif
 #endif
 #ifndef MCCONF_L_LIM_TEMP_FET_START
@@ -314,14 +314,14 @@
 // Setting limits
 #ifdef LFOC_IS_V3
 #define HW_LIM_CURRENT          -250.0, 250.0
-#define HW_LIM_CURRENT_IN       -100.0, 100.0
+#define HW_LIM_CURRENT_IN       -200.0, 200.0
 #define HW_LIM_CURRENT_ABS      0.0, 350.0
 #else
 #define HW_LIM_CURRENT          -150.0, 150.0
-#define HW_LIM_CURRENT_IN       -100.0, 100.0
+#define HW_LIM_CURRENT_IN       -200.0, 200.0
 #define HW_LIM_CURRENT_ABS      0.0, 175.0
 #endif
-#define HW_LIM_VIN              18.0, 95.0
+#define HW_LIM_VIN              1.9, 95.0
 #define HW_LIM_ERPM             -200e3, 200e3
 #define HW_LIM_DUTY_MIN         0.0, 0.1
 #define HW_LIM_DUTY_MAX         0.0, 0.99
