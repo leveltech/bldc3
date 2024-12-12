@@ -77,7 +77,6 @@ static volatile int ignore_iterations;
 static volatile mc_timer_struct timer_struct;
 static volatile int curr_samp_volt; // Use the voltage-synchronized samples for this current sample
 static int hall_to_phase_table[16];
-static int invert_counter = 0;
 static volatile unsigned int slow_ramping_cycles;
 static volatile int has_commutated;
 static volatile mc_rpm_dep_struct rpm_dep;
@@ -546,12 +545,20 @@ static void do_dc_cal(void) {
 
 	chThdSleepMilliseconds(1000);
 	curr0_sum = 0;
+	curr1_sum = 0;
+
+#ifdef HW_HAS_3_SHUNTS
 	curr2_sum = 0;
+#endif
 
 	curr_start_samples = 0;
 	while(curr_start_samples < 4000) {};
 	curr0_offset = curr0_sum / curr_start_samples;
+	curr1_offset = curr1_sum / curr_start_samples;
+
+#ifdef HW_HAS_3_SHUNTS
 	curr2_offset = curr2_sum / curr_start_samples;
+#endif
 
 	DCCAL_OFF();
 	dccal_done = true;
@@ -937,6 +944,7 @@ static void stop_pwm_hw(void) {
 
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 
+	set_switching_frequency(conf->m_bldc_f_sw_max);
 }
 
 static void full_brake_ll(void) {
@@ -964,6 +972,7 @@ static void full_brake_hw(void) {
 
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 
+	set_switching_frequency(conf->m_bldc_f_sw_max);
 }
 
 /**
@@ -985,11 +994,6 @@ static void set_duty_cycle_hl(float dutyCycle) {
 	}
 
 	dutycycle_set = dutyCycle;
-
- // Reset invert_counter when dutyCycle is zero
-    if (dutyCycle == 0.0f) {
-        invert_counter = 0;
-    }
 
 	if (state != MC_STATE_RUNNING) {
 		if (fabsf(dutyCycle) >= conf->l_min_duty) {
@@ -1381,11 +1385,11 @@ static THD_FUNCTION(timer_thread, arg) {
 
 			// Direction tracking
 			if (conf->motor_type == MOTOR_TYPE_DC) {
-				if (mcpwm_get_tot_current_filtered() > 0) {
+				if (amp > 0) {
 					direction = 0;
-					amp = -amp;
 				} else {
 					direction = 1;
+					amp = -amp;
 				}
 			} else {
 				if (sensorless_now) {
@@ -1471,57 +1475,273 @@ static THD_FUNCTION(timer_thread, arg) {
 void mcpwm_adc_inj_int_handler(void) {
 	uint32_t t_start = timer_time_now();
 
-	// Measure currents from shunts 0 and 2 (assuming 3-shunt config)
 	int curr0 = ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_1);
-	int curr2 = ADC_GetInjectedConversionValue(ADC3, ADC_InjectedChannel_1);
+	int curr1 = ADC_GetInjectedConversionValue(ADC2, ADC_InjectedChannel_1);
 
 	int curr0_2 = ADC_GetInjectedConversionValue(ADC2, ADC_InjectedChannel_2);
 	int curr1_2 = ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_2);
 
+#ifdef HW_HAS_3_SHUNTS
+	int curr2 = ADC_GetInjectedConversionValue(ADC3, ADC_InjectedChannel_1);
+#endif
+
 #ifdef INVERTED_SHUNT_POLARITY
 	curr0 = 4095 - curr0;
-	curr2 = 4095 - curr2;
+	curr1 = 4095 - curr1;
 
 	curr0_2 = 4095 - curr0_2;
 	curr1_2 = 4095 - curr1_2;
+#ifdef HW_HAS_3_SHUNTS
+	curr2 = 4095 - curr2;
+#endif
 #endif
 
 	float curr0_currsamp = curr0;
+	float curr1_currsamp = curr1;
+#ifdef HW_HAS_3_SHUNTS
 	float curr2_currsamp = curr2;
+#endif
 
 	if (curr_samp_volt & (1 << 0)) {
 		curr0 = GET_CURRENT1();
 	}
 
+	if (curr_samp_volt & (1 << 1)) {
+		curr1 = GET_CURRENT2();
+	}
+
+#ifdef HW_HAS_3_SHUNTS
 	if (curr_samp_volt & (1 << 2)) {
 		curr2 = GET_CURRENT3();
 	}
-	
+#endif
+
+	// DCCal every other cycle
+	//	static bool sample_ofs = true;
+	//	if (sample_ofs) {
+	//		sample_ofs = false;
+	//		curr0_offset = curr0;
+	//		curr1_offset = curr1;
+	//		DCCAL_OFF();
+	//		return;
+	//	} else {
+	//		sample_ofs = true;
+	//		DCCAL_ON();
+	//	}
+
 	curr0_sum += curr0;
-	curr2_sum += curr2; 
+	curr1_sum += curr1;
+#ifdef HW_HAS_3_SHUNTS
+	curr2_sum += curr2;
+#endif
 
 	curr_start_samples++;
 
 	curr0_currsamp -= curr0_offset;
-	curr2_currsamp -= curr2_offset;
+	curr1_currsamp -= curr1_offset;
 	curr0 -= curr0_offset;
-	curr2 -= curr2_offset;
+	curr1 -= curr1_offset;
 	curr0_2 -= curr0_offset;
-	curr1_2 -= curr0_offset;
+	curr1_2 -= curr1_offset;
+
+#ifdef HW_HAS_3_SHUNTS
+	curr2_currsamp -= curr2_offset;
+	curr2 -= curr2_offset;
+#endif
+
+#if CURR1_DOUBLE_SAMPLE || CURR2_DOUBLE_SAMPLE
+	if (conf->pwm_mode != PWM_MODE_BIPOLAR && conf->motor_type == MOTOR_TYPE_BLDC) {
+		if (direction) {
+			if (CURR1_DOUBLE_SAMPLE && comm_step == 3) {
+				curr0 = (curr0 + curr0_2) / 2.0;
+			} else if (CURR2_DOUBLE_SAMPLE && comm_step == 4) {
+				curr1 = (curr1 + curr1_2) / 2.0;
+			}
+		} else {
+			if (CURR1_DOUBLE_SAMPLE && comm_step == 2) {
+				curr0 = (curr0 + curr0_2) / 2.0;
+			} else if (CURR2_DOUBLE_SAMPLE && comm_step == 1) {
+				curr1 = (curr1 + curr1_2) / 2.0;
+			}
+		}
+	}
+#endif
 
 	ADC_curr_norm_value[0] = curr0;
-	ADC_curr_norm_value[1] = 0; // Remove middle shunt
+	ADC_curr_norm_value[1] = curr1;
+
+#ifdef HW_HAS_3_SHUNTS
 	ADC_curr_norm_value[2] = curr2;
+#else
+	ADC_curr_norm_value[2] = -(ADC_curr_norm_value[0] + ADC_curr_norm_value[1]);
+#endif
 
 	float curr_tot_sample = 0;
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		if (direction) {
+#ifdef HW_HAS_3_SHUNTS
 			curr_tot_sample = -(GET_CURRENT3() - curr2_offset);
+#else
+			curr_tot_sample = -(GET_CURRENT2() - curr1_offset);
+#endif
 		} else {
 			curr_tot_sample = -(GET_CURRENT1() - curr0_offset);
 		}
+	} else {
+		static int detect_now = 0;
+
+		/*
+		 * Commutation Steps FORWARDS
+		 * STEP		BR1		BR2		BR3
+		 * 1		0		+		-
+		 * 2		+		0		-
+		 * 3		+		-		0
+		 * 4		0		-		+
+		 * 5		-		0		+
+		 * 6		-		+		0
+		 *
+		 * Commutation Steps REVERSE (switch phase 2 and 3)
+		 * STEP		BR1		BR2		BR3
+		 * 1		0		-		+
+		 * 2		+		-		0
+		 * 3		+		0		-
+		 * 4		0		+		-
+		 * 5		-		+		0
+		 * 6		-		0		+
+		 */
+
+		if (state == MC_STATE_FULL_BRAKE) {
+			float c0 = (float)ADC_curr_norm_value[0];
+			float c1 = (float)ADC_curr_norm_value[1];
+			float c2 = (float)ADC_curr_norm_value[2];
+			curr_tot_sample = sqrtf((c0*c0 + c1*c1 + c2*c2) / 1.5);
+		} else {
+#ifdef HW_HAS_3_SHUNTS
+			if (direction) {
+				switch (comm_step) {
+				case 1: curr_tot_sample = -(float)ADC_curr_norm_value[2]; break;
+				case 2: curr_tot_sample = -(float)ADC_curr_norm_value[2]; break;
+				case 3: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 4: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 5: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				case 6: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				default: break;
+				}
+			} else {
+				switch (comm_step) {
+				case 1: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 2: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 3: curr_tot_sample = -(float)ADC_curr_norm_value[2]; break;
+				case 4: curr_tot_sample = -(float)ADC_curr_norm_value[2]; break;
+				case 5: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				case 6: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				default: break;
+				}
+			}
+#else
+			if (direction) {
+				switch (comm_step) {
+				case 1: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 2: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 3: curr_tot_sample = (float)ADC_curr_norm_value[0]; break;
+				case 4: curr_tot_sample = (float)ADC_curr_norm_value[1]; break;
+				case 5: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				case 6: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				default: break;
+				}
+			} else {
+				switch (comm_step) {
+				case 1: curr_tot_sample = (float)ADC_curr_norm_value[1]; break;
+				case 2: curr_tot_sample = (float)ADC_curr_norm_value[0]; break;
+				case 3: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 4: curr_tot_sample = -(float)ADC_curr_norm_value[1]; break;
+				case 5: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				case 6: curr_tot_sample = -(float)ADC_curr_norm_value[0]; break;
+				default: break;
+				}
+			}
+#endif
+
+			const float tot_sample_tmp = curr_tot_sample;
+			static int comm_step_prev = 1;
+			static float prev_tot_sample = 0.0;
+			if (comm_step != comm_step_prev) {
+				curr_tot_sample = prev_tot_sample;
+			}
+			comm_step_prev = comm_step;
+			prev_tot_sample = tot_sample_tmp;
+		}
+
+		if (detect_now == 4) {
+			const float a = fabsf(ADC_curr_norm_value[0]);
+			const float b = fabsf(ADC_curr_norm_value[1]);
+
+			if (a > b) {
+				mcpwm_detect_currents[detect_step] = a;
+			} else {
+				mcpwm_detect_currents[detect_step] = b;
+			}
+
+			if (detect_step > 0) {
+				mcpwm_detect_currents_diff[detect_step] =
+						mcpwm_detect_currents[detect_step - 1] - mcpwm_detect_currents[detect_step];
+			} else {
+				mcpwm_detect_currents_diff[detect_step] =
+						mcpwm_detect_currents[5] - mcpwm_detect_currents[detect_step];
+			}
+
+			const int vzero = ADC_V_ZERO;
+			//			const int vzero = (ADC_V_L1 + ADC_V_L2 + ADC_V_L3) / 3;
+
+			switch (comm_step) {
+			case 1:
+			case 4:
+				mcpwm_detect_voltages[detect_step] = ADC_V_L1 - vzero;
+				break;
+
+			case 2:
+			case 5:
+				mcpwm_detect_voltages[detect_step] = ADC_V_L2 - vzero;
+				break;
+
+			case 3:
+			case 6:
+				mcpwm_detect_voltages[detect_step] = ADC_V_L3 - vzero;
+				break;
+
+			default:
+				break;
+			}
+
+			mcpwm_detect_currents_avg[detect_step] += mcpwm_detect_currents[detect_step];
+			mcpwm_detect_avg_samples[detect_step]++;
+
+			stop_pwm_hw();
+		}
+
+		if (detect_now) {
+			detect_now--;
+		}
+
+		if (IS_DETECTING() && detect_now == 0) {
+			detect_now = 5;
+
+			set_duty_cycle_hw(0.2);
+
+			detect_step++;
+			if (detect_step > 5) {
+				detect_step = 0;
+			}
+
+			comm_step = detect_step + 1;
+
+			set_next_comm_step(comm_step);
+			TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
+		}
 	}
+
 	last_current_sample = curr_tot_sample * FAC_CURRENT;
+
 	// Filter out outliers
 	if (fabsf(last_current_sample) > (conf->l_abs_current_max * 1.2)) {
 		last_current_sample = SIGN(last_current_sample) * conf->l_abs_current_max * 1.2;
@@ -1560,24 +1780,199 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 	}
 	direction_before = direction;
 
+	if (conf->motor_type == MOTOR_TYPE_BLDC) {
+		int ph1_raw, ph2_raw, ph3_raw;
 
-	float amp = 0.0;
+		/*
+		 * Calculate the virtual ground, depending on the state.
+		 */
+		if (has_commutated && fabsf(dutycycle_now) > 0.2) {
+			mcpwm_vzero = ADC_V_ZERO;
+		} else {
+			mcpwm_vzero = (ADC_V_L1 + ADC_V_L2 + ADC_V_L3) / 3;
+		}
 
-	if (has_commutated) {
-		amp = dutycycle_now * (float)ADC_Value[ADC_IND_VIN_SENS];
+		if (direction) {
+			ph1 = ADC_V_L1 - mcpwm_vzero;
+			ph2 = ADC_V_L2 - mcpwm_vzero;
+			ph3 = ADC_V_L3 - mcpwm_vzero;
+			ph1_raw = ADC_V_L1;
+			ph2_raw = ADC_V_L2;
+			ph3_raw = ADC_V_L3;
+		} else {
+			ph1 = ADC_V_L1 - mcpwm_vzero;
+			ph2 = ADC_V_L3 - mcpwm_vzero;
+			ph3 = ADC_V_L2 - mcpwm_vzero;
+			ph1_raw = ADC_V_L1;
+			ph2_raw = ADC_V_L3;
+			ph3_raw = ADC_V_L2;
+		}
+
+		update_timer_attempt();
+
+		float amp = 0.0;
+
+		if (has_commutated) {
+			amp = fabsf(dutycycle_now) * (float)ADC_Value[ADC_IND_VIN_SENS];
+		} else {
+			amp = sqrtf((float)(ph1*ph1 + ph2*ph2 + ph3*ph3)) * sqrtf(2.0);
+		}
+
+		// Fill the amplitude FIR filter
+		filter_add_sample((float*)amp_fir_samples, amp,
+				AMP_FIR_TAPS_BITS, (uint32_t*)&amp_fir_index);
+
+		if (sensorless_now) {
+			static float cycle_integrator = 0;
+
+			if (pwm_cycles_sum >= rpm_dep.comm_time_sum_min_rpm) {
+				if (state == MC_STATE_RUNNING) {
+					if (conf->comm_mode == COMM_MODE_INTEGRATE) {
+						// This means that the motor is stuck. If this commutation does not
+						// produce any torque because of misalignment at start, two
+						// commutations ahead should produce full torque.
+						commutate(2);
+					} else if (conf->comm_mode == COMM_MODE_DELAY) {
+						commutate(1);
+					}
+
+					cycle_integrator = 0.0;
+				}
+			}
+
+			if ((state == MC_STATE_RUNNING && pwm_cycles >= 2) || state == MC_STATE_OFF) {
+				int v_diff = 0;
+				int ph_now_raw = 0;
+
+				switch (comm_step) {
+				case 1:
+					v_diff = ph1;
+					ph_now_raw = ph1_raw;
+					break;
+				case 2:
+					v_diff = -ph2;
+					ph_now_raw = ph2_raw;
+					break;
+				case 3:
+					v_diff = ph3;
+					ph_now_raw = ph3_raw;
+					break;
+				case 4:
+					v_diff = -ph1;
+					ph_now_raw = ph1_raw;
+					break;
+				case 5:
+					v_diff = ph2;
+					ph_now_raw = ph2_raw;
+					break;
+				case 6:
+					v_diff = -ph3;
+					ph_now_raw = ph3_raw;
+					break;
+				default:
+					break;
+				}
+
+				// Collect hall sensor samples in the first half of the commutation cycle. This is
+				// because positive timing is much better than negative timing in case they are
+				// mis-aligned.
+				if (v_diff < 50) {
+					hall_detect_table[read_hall()][comm_step]++;
+				}
+
+				// Don't commutate while the motor is standing still and the signal only consists
+				// of weak noise.
+				if (abs(v_diff) < 10) {
+					v_diff = 0;
+				}
+
+				if (v_diff > 0) {
+					// TODO!
+					//					const int min = 100;
+					int min = (int)((1.0 - fabsf(dutycycle_now)) * (float)ADC_Value[ADC_IND_VIN_SENS] * 0.3);
+					if (min > ADC_Value[ADC_IND_VIN_SENS] / 4) {
+						min = ADC_Value[ADC_IND_VIN_SENS] / 4;
+					}
+
+					if (pwm_cycles_sum > (last_pwm_cycles_sum / 2.0) ||
+							!has_commutated || (ph_now_raw > min && ph_now_raw < (ADC_Value[ADC_IND_VIN_SENS] - min))) {
+						cycle_integrator += (float)v_diff / switching_frequency_now;
+					}
+				}
+
+				static float cycle_sum = 0.0;
+				if (conf->comm_mode == COMM_MODE_INTEGRATE) {
+					float limit;
+					if (has_commutated) {
+						limit = rpm_dep.cycle_int_limit_running * (0.0005 * VDIV_CORR);
+					} else {
+						limit = rpm_dep.cycle_int_limit * (0.0005 * VDIV_CORR);
+					}
+
+					if (cycle_integrator >= (rpm_dep.cycle_int_limit_max * (0.0005 * VDIV_CORR)) ||
+							cycle_integrator >= limit) {
+						commutate(1);
+						cycle_integrator = 0.0;
+						cycle_sum = 0.0;
+					}
+				} else if (conf->comm_mode == COMM_MODE_DELAY) {
+					if (v_diff > 0) {
+						cycle_sum += conf->m_bldc_f_sw_max / switching_frequency_now;
+
+						if (cycle_sum >= utils_map(fabsf(rpm_now), 0,
+								conf->sl_cycle_int_rpm_br, rpm_dep.comm_time_sum / 2.0,
+								(rpm_dep.comm_time_sum / 2.0) * conf->sl_phase_advance_at_br)) {
+							commutate(1);
+							cycle_integrator_sum += cycle_integrator * (1.0 / (0.0005 * VDIV_CORR));
+							cycle_integrator_iterations += 1.0;
+							cycle_integrator = 0.0;
+							cycle_sum = 0.0;
+						}
+					} else {
+						cycle_integrator = 0.0;
+						cycle_sum = 0.0;
+					}
+				}
+			} else {
+				cycle_integrator = 0.0;
+			}
+
+			pwm_cycles_sum += conf->m_bldc_f_sw_max / switching_frequency_now;
+			pwm_cycles++;
+		} else {
+			const int hall_phase = mcpwm_read_hall_phase();
+			if (comm_step != hall_phase) {
+				comm_step = hall_phase;
+
+				update_rpm_tacho();
+
+				if (state == MC_STATE_RUNNING) {
+					set_next_comm_step(comm_step);
+					commutate(0);
+				}
+			} else if (state == MC_STATE_RUNNING && !has_commutated) {
+				set_next_comm_step(comm_step);
+				commutate(0);
+			}
+		}
 	} else {
-		amp = ADC_V_L3 - ADC_V_L1;
-	}
+		float amp = 0.0;
 
-	// Fill the amplitude FIR filter
-	filter_add_sample((float*)amp_fir_samples, amp,
-			AMP_FIR_TAPS_BITS, (uint32_t*)&amp_fir_index);
+		if (has_commutated) {
+			amp = dutycycle_now * (float)ADC_Value[ADC_IND_VIN_SENS];
+		} else {
+			amp = ADC_V_L3 - ADC_V_L1;
+		}
 
-	if (state == MC_STATE_RUNNING && !has_commutated) {
-		set_next_comm_step(comm_step);
-		commutate(0);
+		// Fill the amplitude FIR filter
+		filter_add_sample((float*)amp_fir_samples, amp,
+				AMP_FIR_TAPS_BITS, (uint32_t*)&amp_fir_index);
+
+		if (state == MC_STATE_RUNNING && !has_commutated) {
+			set_next_comm_step(comm_step);
+			commutate(0);
+		}
 	}
-	
 
 	const float current_nofilter = mcpwm_get_tot_current();
 	const float current_in_nofilter = current_nofilter * fabsf(dutycycle_now);
@@ -1588,9 +1983,20 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		float ramp_step = conf->m_duty_ramp_step / (switching_frequency_now / 1000.0);
 		float ramp_step_no_lim = ramp_step;
 
+		if (slow_ramping_cycles) {
+			slow_ramping_cycles--;
+			ramp_step *= 0.1;
+		}
+
 		float dutycycle_now_tmp = dutycycle_now;
 
-		if (control_mode == CONTROL_MODE_CURRENT) {
+#if BLDC_SPEED_CONTROL_CURRENT
+		if (control_mode == CONTROL_MODE_CURRENT ||
+				control_mode == CONTROL_MODE_POS ||
+				control_mode == CONTROL_MODE_SPEED) {
+#else
+		if (control_mode == CONTROL_MODE_CURRENT || control_mode == CONTROL_MODE_POS) {
+#endif
 			// Compute error
 			const float error = current_set - (direction ? current_nofilter : -current_nofilter);
 			float step = error * conf->cc_gain * voltage_scale;
@@ -1602,8 +2008,20 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 			// Switching frequency correction
 			step /= switching_frequency_now / 1000.0;
 
-			dutycycle_now_tmp += step;
+			if (slow_ramping_cycles) {
+				slow_ramping_cycles--;
+				step *= 0.1;
+			}
 
+			// Optionally apply startup boost.
+			if (fabsf(dutycycle_now_tmp) < start_boost) {
+				utils_step_towards(&dutycycle_now_tmp,
+						current_set > 0.0 ?
+								start_boost :
+								-start_boost, ramp_step);
+			} else {
+				dutycycle_now_tmp += step;
+			}
 
 			// Upper truncation
 			utils_truncate_number((float*)&dutycycle_now_tmp, -conf->l_max_duty, conf->l_max_duty);
@@ -1619,8 +2037,7 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 
 			// The set dutycycle should be in the correct direction in case the output is lower
 			// than the minimum duty cycle and the mechanism below gets activated.
-			//dutycycle_set = dutycycle_now_tmp >= 0.0 ? conf->l_min_duty : -conf->l_min_duty;
-
+			dutycycle_set = dutycycle_now_tmp >= 0.0 ? conf->l_min_duty : -conf->l_min_duty;
 		} else if (control_mode == CONTROL_MODE_CURRENT_BRAKE) {
 			// Compute error
 			const float error = -fabsf(current_set) - current_nofilter;
@@ -1694,20 +2111,25 @@ void mcpwm_adc_int_handler(void *p, uint32_t flags) {
 		}
 
 		// Don't start in the opposite direction when the RPM is too high even if the current is low enough.
-
-///		if (conf->motor_type != MOTOR_TYPE_DC) {
-///			const float rpm = mcpwm_get_rpm();
-///			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
-///				dutycycle_now = -conf->l_min_duty;
-///			} else if (dutycycle_now <= -conf->l_min_duty && rpm > conf->l_max_erpm_fbrake) {
-///				dutycycle_now = conf->l_min_duty;
-///			}
-///		}
+		if (conf->motor_type != MOTOR_TYPE_DC) {
+			const float rpm = mcpwm_get_rpm();
+			if (dutycycle_now >= conf->l_min_duty && rpm < -conf->l_max_erpm_fbrake) {
+				dutycycle_now = -conf->l_min_duty;
+			} else if (dutycycle_now <= -conf->l_min_duty && rpm > conf->l_max_erpm_fbrake) {
+				dutycycle_now = conf->l_min_duty;
+			}
+		}
 
 		set_duty_cycle_ll(dutycycle_now);
 	}
 
 	mc_interface_mc_timer_isr(false);
+
+	if (encoder_is_configured()) {
+		float pos = encoder_read_deg();
+		run_pid_control_pos(1.0 / switching_frequency_now, pos);
+		pll_run(-DEG2RAD_f(pos), 1.0 / switching_frequency_now, &m_pll_phase, &m_pll_speed);
+	}
 
 	last_adc_isr_duration = timer_seconds_elapsed_since(t_start);
 }
@@ -1719,6 +2141,8 @@ void mcpwm_set_detect(void) {
 
 	control_mode = CONTROL_MODE_NONE;
 	stop_pwm_hw();
+
+	set_switching_frequency(conf->m_bldc_f_sw_max);
 
 	for(int i = 0;i < 6;i++) {
 		mcpwm_detect_currents[i] = 0;
@@ -1885,13 +2309,36 @@ static int read_hall(void) {
 	return READ_HALL1() | (READ_HALL2() << 1) | (READ_HALL3() << 2);
 }
 
+/*
+ * Commutation Steps FORWARDS
+ * STEP		BR1		BR2		BR3
+ * 1		0		+		-
+ * 2		+		0		-
+ * 3		+		-		0
+ * 4		0		-		+
+ * 5		-		0		+
+ * 6		-		+		0
+ *
+ * Commutation Steps REVERSE (switch phase 2 and 3)
+ * STEP		BR1		BR2		BR3
+ * 1		0		-		+
+ * 2		+		-		0
+ * 3		+		0		-
+ * 4		0		+		-
+ * 5		-		+		0
+ * 6		-		0		+
+ */
 
 static void update_adc_sample_pos(mc_timer_struct *timer_tmp) {
 	volatile uint32_t duty = timer_tmp->duty;
 	volatile uint32_t top = timer_tmp->top;
 	volatile uint32_t val_sample = timer_tmp->val_sample;
 	volatile uint32_t curr1_sample = timer_tmp->curr1_sample;
+	volatile uint32_t curr2_sample = timer_tmp->curr2_sample;
+
+#ifdef HW_HAS_3_SHUNTS
 	volatile uint32_t curr3_sample = timer_tmp->curr3_sample;
+#endif
 
 	if (duty > (uint32_t)((float)top * conf->l_max_duty)) {
 		duty = (uint32_t)((float)top * conf->l_max_duty);
@@ -1901,13 +2348,16 @@ static void update_adc_sample_pos(mc_timer_struct *timer_tmp) {
 
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		curr1_sample = top - 10; // Not used anyway
+		curr2_sample = top - 10;
+#ifdef HW_HAS_3_SHUNTS
 		curr3_sample = top - 10;
+#endif
 
 		if (duty > 1000) {
 			val_sample = duty / 2;
 		} else {
 			val_sample = duty + 800;
-			curr_samp_volt = (1 << 0) | (1 << 2);
+			curr_samp_volt = (1 << 0) | (1 << 1) | (1 << 2);
 		}
 
 		//		if (duty < (top / 2)) {
@@ -1915,11 +2365,197 @@ static void update_adc_sample_pos(mc_timer_struct *timer_tmp) {
 		//		} else {
 		//			val_sample = duty / 2;
 		//		}
-	} 
+	} else {
+		// Sample the ADC at an appropriate time during the pwm cycle
+		if (IS_DETECTING()) {
+			// Voltage samples
+			val_sample = duty / 2;
+
+			// Current samples
+			curr1_sample = (top - duty) / 2 + duty;
+			curr2_sample = (top - duty) / 2 + duty;
+#ifdef HW_HAS_3_SHUNTS
+			curr3_sample = (top - duty) / 2 + duty;
+#endif
+		} else {
+			if (conf->pwm_mode == PWM_MODE_BIPOLAR) {
+				uint32_t samp_neg = top - 2;
+				uint32_t samp_pos = duty + (top - duty) / 2;
+				uint32_t samp_zero = top - 2;
+
+				// Voltage and other sampling
+				val_sample = top / 4;
+
+				// Current sampling
+				// TODO: Adapt for 3 shunts
+#ifdef HW_HAS_3_SHUNTS
+				curr3_sample = samp_zero;
+#endif
+
+				switch (comm_step) {
+				case 1:
+					if (direction) {
+						curr1_sample = samp_zero;
+						curr2_sample = samp_neg;
+						curr_samp_volt = (1 << 1);
+					} else {
+						curr1_sample = samp_zero;
+						curr2_sample = samp_pos;
+					}
+					break;
+
+				case 2:
+					if (direction) {
+						curr1_sample = samp_pos;
+						curr2_sample = samp_neg;
+						curr_samp_volt = (1 << 1);
+					} else {
+						curr1_sample = samp_pos;
+						curr2_sample = samp_zero;
+					}
+					break;
+
+				case 3:
+					if (direction) {
+						curr1_sample = samp_pos;
+						curr2_sample = samp_zero;
+					} else {
+						curr1_sample = samp_pos;
+						curr2_sample = samp_neg;
+						curr_samp_volt = (1 << 1);
+					}
+					break;
+
+				case 4:
+					if (direction) {
+						curr1_sample = samp_zero;
+						curr2_sample = samp_pos;
+					} else {
+						curr1_sample = samp_zero;
+						curr2_sample = samp_neg;
+						curr_samp_volt = (1 << 1);
+					}
+					break;
+
+				case 5:
+					if (direction) {
+						curr1_sample = samp_neg;
+						curr2_sample = samp_pos;
+						curr_samp_volt = (1 << 0);
+					} else {
+						curr1_sample = samp_neg;
+						curr2_sample = samp_zero;
+						curr_samp_volt = (1 << 0);
+					}
+					break;
+
+				case 6:
+					if (direction) {
+						curr1_sample = samp_neg;
+						curr2_sample = samp_zero;
+						curr_samp_volt = (1 << 0);
+					} else {
+						curr1_sample = samp_neg;
+						curr2_sample = samp_pos;
+						curr_samp_volt = (1 << 0);
+					}
+					break;
+				}
+			} else {
+				// Voltage samples
+				val_sample = duty / 2;
+
+				// Current samples
+				curr1_sample = duty + (top - duty) / 2;
+				if (curr1_sample > (top - 70)) {
+					curr1_sample = top - 70;
+				}
+
+				curr2_sample = curr1_sample;
+#ifdef HW_HAS_3_SHUNTS
+				curr3_sample = curr1_sample;
+#endif
+
+				// The off sampling time is short, so use the on sampling time
+				// where possible
+				if (duty > (top / 2)) {
+#if CURR1_DOUBLE_SAMPLE
+					if (comm_step == 2 || comm_step == 3) {
+						curr1_sample = duty + 90;
+						curr2_sample = top - 230;
+					}
+#endif
+
+#if CURR2_DOUBLE_SAMPLE
+					if (direction) {
+						if (comm_step == 4 || comm_step == 5) {
+							curr1_sample = duty + 90;
+							curr2_sample = top - 230;
+						}
+					} else {
+						if (comm_step == 1 || comm_step == 6) {
+							curr1_sample = duty + 90;
+							curr2_sample = top - 230;
+						}
+					}
+#endif
+
+#ifdef HW_HAS_3_SHUNTS
+					if (direction) {
+						switch (comm_step) {
+						case 1: curr_samp_volt = (1 << 0) || (1 << 2); break;
+						case 2: curr_samp_volt = (1 << 1) || (1 << 2); break;
+						case 3: curr_samp_volt = (1 << 1) || (1 << 2); break;
+						case 4: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 5: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 6: curr_samp_volt = (1 << 0) || (1 << 2); break;
+						default: break;
+						}
+					} else {
+						switch (comm_step) {
+						case 1: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 2: curr_samp_volt = (1 << 1) || (1 << 2); break;
+						case 3: curr_samp_volt = (1 << 1) || (1 << 2); break;
+						case 4: curr_samp_volt = (1 << 0) || (1 << 2); break;
+						case 5: curr_samp_volt = (1 << 0) || (1 << 2); break;
+						case 6: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						default: break;
+						}
+					}
+#else
+					if (direction) {
+						switch (comm_step) {
+						case 1: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 2: curr_samp_volt = (1 << 1); break;
+						case 3: curr_samp_volt = (1 << 1); break;
+						case 4: curr_samp_volt = (1 << 0); break;
+						case 5: curr_samp_volt = (1 << 0); break;
+						case 6: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						default: break;
+						}
+					} else {
+						switch (comm_step) {
+						case 1: curr_samp_volt = (1 << 0); break;
+						case 2: curr_samp_volt = (1 << 1); break;
+						case 3: curr_samp_volt = (1 << 1); break;
+						case 4: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 5: curr_samp_volt = (1 << 0) || (1 << 1); break;
+						case 6: curr_samp_volt = (1 << 0); break;
+						default: break;
+						}
+					}
+#endif
+				}
+			}
+		}
+	}
 
 	timer_tmp->val_sample = val_sample;
 	timer_tmp->curr1_sample = curr1_sample;
+	timer_tmp->curr2_sample = curr2_sample;
+#ifdef HW_HAS_3_SHUNTS
 	timer_tmp->curr3_sample = curr3_sample;
+#endif
 }
 
 static void update_rpm_tacho(void) {
@@ -1966,6 +2602,25 @@ static void commutate(int steps) {
 	last_pwm_cycles_sums[comm_step - 1] = pwm_cycles_sum;
 	pwm_cycles_sum = 0;
 	pwm_cycles = 0;
+
+	if (conf->motor_type == MOTOR_TYPE_BLDC && sensorless_now) {
+		comm_step += steps;
+		while (comm_step > 6) {
+			comm_step -= 6;
+		}
+		while (comm_step < 1) {
+			comm_step += 6;
+		}
+
+		update_rpm_tacho();
+
+		if (!(state == MC_STATE_RUNNING)) {
+			update_sensor_mode();
+			return;
+		}
+
+		set_next_comm_step(comm_step);
+	}
 
 	TIM_GenerateEvent(TIM1, TIM_EventSource_COM);
 	has_commutated = 1;
@@ -2025,6 +2680,19 @@ static void update_timer_attempt(void) {
 	utils_sys_unlock_cnt();
 }
 
+static void set_switching_frequency(float frequency) {
+	switching_frequency_now = frequency;
+	mc_timer_struct timer_tmp;
+
+	utils_sys_lock_cnt();
+	timer_tmp = timer_struct;
+	utils_sys_unlock_cnt();
+
+	timer_tmp.top = SYSTEM_CORE_CLOCK / (int)switching_frequency_now;
+	update_adc_sample_pos(&timer_tmp);
+	set_next_timer_settings(&timer_tmp);
+}
+
 static void set_next_comm_step(int next_step) {
 	if (conf->motor_type == MOTOR_TYPE_DC) {
 		// 0
@@ -2053,6 +2721,303 @@ static void set_next_comm_step(int next_step) {
 			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
 			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Enable);
 		}
+
 		return;
+	}
+
+	uint16_t positive_oc_mode = TIM_OCMode_PWM1;
+	uint16_t negative_oc_mode = TIM_OCMode_Inactive;
+
+	uint16_t positive_highside = TIM_CCx_Enable;
+	uint16_t positive_lowside = TIM_CCxN_Enable;
+
+	uint16_t negative_highside = TIM_CCx_Enable;
+	uint16_t negative_lowside = TIM_CCxN_Enable;
+
+	if (!IS_DETECTING()) {
+		switch (conf->pwm_mode) {
+		case PWM_MODE_NONSYNCHRONOUS_HISW:
+			positive_lowside = TIM_CCxN_Disable;
+			break;
+
+		case PWM_MODE_SYNCHRONOUS:
+			break;
+
+		case PWM_MODE_BIPOLAR:
+			negative_oc_mode = TIM_OCMode_PWM2;
+			break;
+		}
+	}
+
+	if (next_step == 1) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR1();
+			ENABLE_BR2();
+			ENABLE_BR3();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR1();
+			ENABLE_BR3();
+			ENABLE_BR2();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, negative_lowside);
+		}
+	} else if (next_step == 2) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR2();
+			ENABLE_BR1();
+			ENABLE_BR3();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR3();
+			ENABLE_BR1();
+			ENABLE_BR2();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, negative_lowside);
+		}
+	} else if (next_step == 3) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR3();
+			ENABLE_BR1();
+			ENABLE_BR2();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR2();
+			ENABLE_BR1();
+			ENABLE_BR3();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, negative_lowside);
+		}
+	} else if (next_step == 4) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR1();
+			ENABLE_BR3();
+			ENABLE_BR2();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR1();
+			ENABLE_BR2();
+			ENABLE_BR3();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, negative_lowside);
+		}
+	} else if (next_step == 5) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR2();
+			ENABLE_BR3();
+			ENABLE_BR1();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR3();
+			ENABLE_BR2();
+			ENABLE_BR1();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, negative_lowside);
+		}
+	} else if (next_step == 6) {
+		if (direction) {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR3();
+			ENABLE_BR2();
+			ENABLE_BR1();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, negative_lowside);
+		} else {
+#ifdef HW_HAS_DRV8313
+			DISABLE_BR2();
+			ENABLE_BR3();
+			ENABLE_BR1();
+#endif
+			// 0
+			TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_OCMode_Inactive);
+			TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+			TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+
+			// +
+			TIM_SelectOCxM(TIM1, TIM_Channel_3, positive_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_3, positive_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_3, positive_lowside);
+
+			// -
+			TIM_SelectOCxM(TIM1, TIM_Channel_1, negative_oc_mode);
+			TIM_CCxCmd(TIM1, TIM_Channel_1, negative_highside);
+			TIM_CCxNCmd(TIM1, TIM_Channel_1, negative_lowside);
+		}
+	} else {
+#ifdef HW_HAS_DRV8313
+		DISABLE_BR1();
+		DISABLE_BR2();
+		DISABLE_BR3();
+#endif
+		// Invalid phase.. stop PWM!
+		TIM_SelectOCxM(TIM1, TIM_Channel_1, TIM_ForcedAction_InActive);
+		TIM_CCxCmd(TIM1, TIM_Channel_1, TIM_CCx_Enable);
+		TIM_CCxNCmd(TIM1, TIM_Channel_1, TIM_CCxN_Disable);
+
+		TIM_SelectOCxM(TIM1, TIM_Channel_2, TIM_ForcedAction_InActive);
+		TIM_CCxCmd(TIM1, TIM_Channel_2, TIM_CCx_Enable);
+		TIM_CCxNCmd(TIM1, TIM_Channel_2, TIM_CCxN_Disable);
+
+		TIM_SelectOCxM(TIM1, TIM_Channel_3, TIM_ForcedAction_InActive);
+		TIM_CCxCmd(TIM1, TIM_Channel_3, TIM_CCx_Enable);
+		TIM_CCxNCmd(TIM1, TIM_Channel_3, TIM_CCxN_Disable);
 	}
 }
