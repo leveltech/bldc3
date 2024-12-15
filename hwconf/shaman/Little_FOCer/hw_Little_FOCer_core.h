@@ -122,7 +122,7 @@
 #endif
 #ifndef CURRENT_SHUNT_RES
 #ifdef LFOC_IS_V3
-#define CURRENT_SHUNT_RES       0.0002
+#define CURRENT_SHUNT_RES       0.0006
 #else
 #define CURRENT_SHUNT_RES       0.0005
 #endif
@@ -321,7 +321,7 @@
 #define HW_LIM_CURRENT_IN       -200.0, 200.0
 #define HW_LIM_CURRENT_ABS      0.0, 175.0
 #endif
-#define HW_LIM_VIN              1.9, 95.0
+#define HW_LIM_VIN              1.0, 95.0
 #define HW_LIM_ERPM             -200e3, 200e3
 #define HW_LIM_DUTY_MIN         0.0, 0.1
 #define HW_LIM_DUTY_MAX         0.0, 0.99
