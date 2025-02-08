@@ -122,7 +122,7 @@
 #endif
 #ifndef CURRENT_SHUNT_RES
 #ifdef LFOC_IS_V3
-#define CURRENT_SHUNT_RES       0.0006
+#define CURRENT_SHUNT_RES       0.0002
 #else
 #define CURRENT_SHUNT_RES       0.0005
 #endif
@@ -270,14 +270,14 @@
 
 // Default setting overrides
 #ifndef MCCONF_L_MIN_VOLTAGE
-#define MCCONF_L_MIN_VOLTAGE            1.9        // Minimum input voltage
+#define MCCONF_L_MIN_VOLTAGE            1.0        // Minimum input voltage
 #endif
 #ifndef MCCONF_L_MAX_VOLTAGE
 #define MCCONF_L_MAX_VOLTAGE            95.0    // Maximum input voltage
 #endif
 #ifndef MCCONF_L_CURRENT_MAX
 #ifdef LFOC_IS_V3
-#define MCCONF_L_CURRENT_MAX                100.0    // Current limit in Amperes (Upper)
+#define MCCONF_L_CURRENT_MAX                200.0    // Current limit in Amperes (Upper)
 #else
 #define MCCONF_L_CURRENT_MAX                70.0    // Current limit in Amperes (Upper)
 #endif
@@ -293,7 +293,7 @@
 #endif
 #ifndef MCCONF_L_MAX_ABS_CURRENT
 #ifdef LFOC_IS_V3
-#define MCCONF_L_MAX_ABS_CURRENT            300.0   // The maximum absolute current above which a fault is generated
+#define MCCONF_L_MAX_ABS_CURRENT            350.0   // The maximum absolute current above which a fault is generated
 #else
 #define MCCONF_L_MAX_ABS_CURRENT            200   // The maximum absolute current above which a fault is generated
 #endif
@@ -314,7 +314,7 @@
 // Setting limits
 #ifdef LFOC_IS_V3
 #define HW_LIM_CURRENT          -250.0, 250.0
-#define HW_LIM_CURRENT_IN       -200.0, 200.0
+#define HW_LIM_CURRENT_IN       -220.0, 220.0
 #define HW_LIM_CURRENT_ABS      0.0, 350.0
 #else
 #define HW_LIM_CURRENT          -150.0, 150.0
@@ -325,6 +325,6 @@
 #define HW_LIM_ERPM             -200e3, 200e3
 #define HW_LIM_DUTY_MIN         0.0, 0.1
 #define HW_LIM_DUTY_MAX         0.0, 0.99
-#define HW_LIM_TEMP_FET         -40.0, 110.0
+#define HW_LIM_TEMP_FET         -40.0, 80.0
 
 #endif /* HW_LITTLE_FOCER_H_ */
